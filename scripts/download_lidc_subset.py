@@ -27,10 +27,7 @@ def main():
     series_uids = [s['SeriesInstanceUID'] for s in selected_series]
 
     print(f"Downloading {len(series_uids)} series...")
-    nbia.downloadSeries(
-        seriesInstanceUidList=series_uids,
-        downloadDir=download_dir
-    )
+    nbia.downloadSeries(series_uids, download_dir)
 
     print("Download completed.")
 
