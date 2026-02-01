@@ -28,3 +28,9 @@ Training and data processing are intended to be executed on **Google Colab**, wh
 
 ```bash
 python scripts/download_lidc_subset.py
+
+## Project Status
+This project is currently under active development. 
+Some components may require additional configuration or data access 
+to run end-to-end. The core model architecture and training pipeline 
+are implemented and documented.
