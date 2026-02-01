@@ -1,0 +1,3 @@
+tcia-utils
+pydicom
+numpy
