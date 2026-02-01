@@ -28,7 +28,6 @@ def main():
 
     print(f"Downloading {len(series_uids)} series...")
     nbia.downloadSeries(
-        collection=collection,
         seriesInstanceUid=series_uids,
         downloadDir=download_dir
     )
