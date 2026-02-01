@@ -7,28 +7,37 @@ This scripts:
 3. Downloads only those series
 """
 
-import tcia_utils
-from tcia_utils import nbia
 import os
+from tcia_utils import nbia
 
-collection = "LIDC-IDRI"
-num_series = 20
-download_dir = "data/raw/LIDC_subset"
+# ================= CONFIG =================
+COLLECTION = "LIDC-IDRI"
+NUM_SERIES = 20
+DOWNLOAD_DIR = "data/raw/LIDC_subset"
+# =========================================
+
 
 def main():
-    os.makedirs(download_dir, exist_ok=True)
+    os.makedirs(DOWNLOAD_DIR, exist_ok=True)
 
     print("Fetching series metadata...")
-    series_list = nbia.getSeries(collection=collection)
+    series_list = nbia.getSeries(collection=COLLECTION)
 
     print(f"Total series found: {len(series_list)}")
 
-    selected_series = series_list[:num_series]
+    # Keep full series dictionaries
+    selected_series = series_list[:NUM_SERIES]
 
     print(f"Downloading {len(selected_series)} series...")
-    nbia.downloadSeries(selected_series, download_dir)
 
-    print("Download completed.")
+    nbia.downloadSeries(
+        selected_series,
+        number=0,
+        downloadDir=DOWNLOAD_DIR
+    )
 
-if __name__=="__main__":
+    print("Download completed successfully.")
+
+
+if __name__ == "__main__":
     main()
