@@ -10,11 +10,9 @@ This scripts:
 import os
 from tcia_utils import nbia
 
-# ================= CONFIG =================
 COLLECTION = "LIDC-IDRI"
 NUM_SERIES = 20
 DOWNLOAD_DIR = "data/raw/LIDC_subset"
-# =========================================
 
 
 def main():
@@ -25,14 +23,14 @@ def main():
 
     print(f"Total series found: {len(series_list)}")
 
-    # Keep full series dictionaries
     selected_series = series_list[:NUM_SERIES]
+    series_uids = [s["SeriesInstanceUID"] for s in selected_series]
 
-    print(f"Downloading {len(selected_series)} series...")
+    print(f"Downloading {len(series_uids)} series...")
 
+    # STABLE API (tcia-utils 1.2.0)
     nbia.downloadSeries(
-        selected_series,
-        number=0,
+        seriesInstanceUid=series_uids,
         downloadDir=DOWNLOAD_DIR
     )
 
