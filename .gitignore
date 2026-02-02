@@ -1,44 +1,17 @@
-# =========================
-# Python
-# =========================
-__pycache__/
-*.py[cod]
-*.pyo
+# Ignore everything inside data
+data/*
 
-# =========================
-# Virtual Environments
-# =========================
+# But keep Python source files
+!data/*.py
+!data/**/*.py
+
+# Ignore medical images
+data/**/*.dcm
+data/**/*.nii
+data/**/*.nii.gz
+
+# Ignore environments and cache
+myvenv/
 venv/
-venv312/
-.env
-
-# =========================
-# Data (DO NOT COMMIT)
-# =========================
-data/
-*.dcm
-*.nii
-*.nii.gz
-*.zip
-
-# =========================
-# Model artifacts
-# =========================
-*.pth
-*.ckpt
-*.h5
-logs/
-outputs/
-
-# =========================
-# Notebooks
-# =========================
-.ipynb_checkpoints/
-
-# =========================
-# Editors / OS
-# =========================
-.vscode/
-.idea/
-.DS_Store
-Thumbs.db
+__pycache__/
+*.pyc
