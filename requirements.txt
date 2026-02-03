@@ -1,2 +1,5 @@
 tcia_utils
 pandas
+numpy 
+pydicom
+matplotlib
