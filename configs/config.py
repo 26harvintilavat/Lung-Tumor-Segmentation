@@ -10,11 +10,11 @@ COLLECTION_NAME = "NSCLC-Radiomics"
 
 # Number of series to download
 # Set to a lower number for testing, higher for full dataset
-NUM_SERIES_TO_DOWNLOAD = 20
+NUM_SERIES_TO_DOWNLOAD = 1
 
 # Download directory
 # Will be created if it doesn't exist
-DOWNLOAD_DIRECTORY = "./lung_data"
+DOWNLOAD_DIRECTORY = "data/raw/lung_data"
 
 # Metadata filename
 METADATA_FILENAME = "dataset_metadata.csv"
