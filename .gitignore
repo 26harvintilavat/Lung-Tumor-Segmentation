@@ -5,6 +5,10 @@ data/*
 !data/*.py
 !data/**/*.py
 
+data/raw/
+data/processed/
+lung_data/
+
 # Ignore medical images
 data/**/*.dcm
 data/**/*.nii
@@ -15,3 +19,4 @@ myvenv/
 venv/
 __pycache__/
 *.pyc
+
