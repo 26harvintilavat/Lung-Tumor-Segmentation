@@ -12,7 +12,7 @@ from tcia_utils import nbia
 import os
 import pandas as pd
 from typing import Optional
-import config
+from configs import config
 
 
 def fetch_series_info(collection: str = config.COLLECTION_NAME) -> pd.DataFrame:
