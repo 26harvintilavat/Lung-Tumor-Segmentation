@@ -137,3 +137,4 @@ Suggestions, issues, and discussions are welcome. Since this project is still ev
 ---
 
 > ⭐ If you find this project interesting, consider starring the repository and following the progress!
+
