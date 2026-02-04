@@ -1,6 +1,8 @@
-tcia_utils
+# Core requirements for LIDC-IDRI downloader with mask extraction
+tcia-utils
 pandas
-numpy 
+numpy
 pydicom
+pylidc
 matplotlib
 nibabel
