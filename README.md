@@ -28,15 +28,19 @@ The focus is on building a **clean, modular, and reproducible pipeline**, simila
 
 ## 🧩 Current Progress
 
-✅ TCIA dataset ingestion pipeline (modular)
-✅ Partial dataset download support (single or multiple CT series)
-✅ Metadata logging for reproducibility
+✅ LIDC-IDRI dataset selection  
+✅ TCIA dataset downloader (robust & resumable)  
+✅ Raw CT series download and verification  
+✅ DICOM loading using pydicom  
+✅ Slice ordering and 3D volume construction  
+✅ Hounsfield Unit (HU) conversion  
+✅ Lung windowing and normalization  
+✅ Dataset abstraction for CT volumes  
 
-🚧 DICOM preprocessing (in progress)
-🚧 CT slice visualization
-🚧 Dataset class for training
-🚧 Model training (U-Net / variants)
-🚧 Evaluation and metrics
+🚧 Annotation parsing (LIDC XML)  
+🚧 Segmentation mask generation  
+🚧 Model training (U-Net / variants)  
+🚧 Evaluation and metrics  
 
 ---
 
@@ -45,10 +49,25 @@ The focus is on building a **clean, modular, and reproducible pipeline**, simila
 ```
 lung-tumor-segmentation/
 │
+├── configs/
+│ └── config.py # Centralized configuration
+│
 ├── data/
-│   |── lung_data/            # Downloaded data (gitignored)
-|   ├── config.py
-|   ├── download_lung_data.py
+│ └── raw/lung_data/ # Downloaded LIDC-IDRI CT scans (gitignored)
+│ ├── LIDC-IDRI-0001/
+│ ├── LIDC-IDRI-0005/
+│ └── download_log.json
+│
+├── notebooks/
+│ ├── archive/ # Old dataset experiments
+│ └── 02_lidc_notebook.ipynb # LIDC data exploration
+│
+├── scripts/
+│ └── lidc_downloader.py # TCIA downloader for LIDC-IDRI
+│
+├── src/
+│ ├── preprocessing.py # HU conversion & windowing
+│ └── dataset.py # CT dataset abstraction
 │
 ├── requirements.txt
 ├── .gitignore
@@ -60,11 +79,13 @@ lung-tumor-segmentation/
 ## 📊 Dataset
 
 * **Source:** The Cancer Imaging Archive (TCIA)
-* **Collection:** NSCLC-Radiomics
+* **Collection:** LIDC-IDRI (Lung Image Dataset Consortium)
 * **Modality:** CT
-* **Data Type:** DICOM
+* **Data Type:** DICOM (.dcm)
 
-The dataset downloader is configurable to fetch a **small subset for testing** or a **larger subset for training**, enabling safe and incremental experimentation.
+At the current stage, the project uses **raw CT scan series only**.
+Segmentation masks are **not yet generated** and will be derived from LIDC
+annotations in a later phase of the project.
 
 ---
 
@@ -76,16 +97,10 @@ The dataset downloader is configurable to fetch a **small subset for testing** o
    pip install -r requirements.txt
    ```
 
-2. Configure dataset settings in `config.py`:
+2. Download LIDC-IDRI CT data:
 
-   ```python
-   NUM_SERIES_TO_DOWNLOAD = 20 # increase later
    ```
-
-3. Run the downloader:
-
-   ```bash
-   python data/download_lung_data.py
+   python scripts/lidc_downloader.py --num-series 2
    ```
 
 ---
