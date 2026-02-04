@@ -15,11 +15,14 @@ class LungCTDataset:
         self.volume = self._build_volume()
 
     def _load_slices(self):
-        dicom_files = sorted(
-            self.series_dir.glob("*.dcm"),
-            key=lambda x: pydicom.dcmread(x).InstanceNumber
-        )
-        return [pydicom.dcmread(f) for f in dicom_files]
+        dicom_files = list(self.series_dir.rglob("*.dcm"))
+
+        if not dicom_files:
+            raise RuntimeError(f"No DICOM files found in {self.series_dir}")
+        
+        slices = [pydicom.dcmread(f) for f in dicom_files]
+        slices.sort(key=lambda s: float(s.ImagePositionPatient[2]))
+        return slices
     
     def _get_pixel_spacing(self):
         return tuple(map(float, self.slices[0].PixelSpacing))
