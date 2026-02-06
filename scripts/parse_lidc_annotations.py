@@ -4,11 +4,20 @@ from pathlib import Path
 
 LIDC_NS = {"lidc": "http://www.nih.gov"}
 
+def extract_patient_id(xml_path):
+    """ Convert TCIA numeric XML filename to LIDC-IDRI patient ID.Example: 
+        001.xml -> LIDC-IDRI-0001
+        005.xml -> LIDC-IDRI-0005
+    """
+    case_num = int(xml_path.stem)
+    return f"LIDC-IDRI-{case_num:04d}"
+
+
 def parse_lidc_xml(xml_path: Path):
     tree = ET.parse(xml_path)
     root = tree.getroot()
 
-    patient_id = xml_path.stem
+    patient_id = extract_patient_id(xml_path)
 
     annotation = {
         "patient_id": patient_id,
