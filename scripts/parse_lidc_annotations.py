@@ -18,13 +18,22 @@ def parse_lidc_xml(xml_path: Path):
     root = tree.getroot()
 
     patient_id = extract_patient_id(xml_path)
+    series_uid_elem = root.find(".//lidc:SeriesInstanceUid", LIDC_NS)
+    if series_uid_elem is None:
+        raise ValueError(f"No SeriesInstanceUid found in {xml_path}")
+
+    series_instance_uid = series_uid_elem.text.strip()
 
     annotation = {
         "patient_id": patient_id,
+        "series_instance_uid": series_instance_uid,
         "nodules": []
     }
 
     reading_sessions = root.findall(".//lidc:readingSession", LIDC_NS)
+
+    if len(reading_sessions) == 0:
+        print(f"Warning: no reading sessions in {xml_path}")
 
     for r_idx, session in enumerate(reading_sessions, start=1):
         radiologist_id = f"R{r_idx}"
@@ -33,32 +42,46 @@ def parse_lidc_xml(xml_path: Path):
 
         for n_idx, nodule in enumerate(nodules, start=1):
             nodule_entry = {
-                "nodule_id": f"Nodule_{n_idx}",
+                "nodule_id": f"R{r_idx}_Nodule_{n_idx}",
                 "radiologist_id": radiologist_id,
                 "slices": []
             }
 
-            rois = nodule.findall(".//lidc:roi", LIDC_NS)
+            for roi in nodule.findall("lidc:roi", LIDC_NS):
+                edges = roi.findall("lidc:edgeMap", LIDC_NS)
+                if len(edges) < 3:
+                    continue
 
-            for roi in rois:
-                z_pos = float(roi.find("lidc:imageZposition", LIDC_NS).text)
+                sop_uid_elem = roi.find("lidc:imageSOP_UID", LIDC_NS)
+                if sop_uid_elem is None:
+                        continue  # safety
+
+                sop_uid = sop_uid_elem.text.strip()
+                z_elem = roi.find("lidc:imageZposition", LIDC_NS)
+                if z_elem is None:
+                    continue
+
+                z_position = float(z_elem.text)
+
 
                 contour = []
-                for edge in roi.findall(".//lidc:edgeMap", LIDC_NS):
+                for edge in edges:
                     x = int(edge.find("lidc:xCoord", LIDC_NS).text)
                     y = int(edge.find("lidc:yCoord", LIDC_NS).text)
                     contour.append([x, y])
 
-                nodule_entry['slices'].append({
-                    "z_position": z_pos,
+                nodule_entry["slices"].append({
+                    "sop_uid": sop_uid,
+                    "z_position": z_position,
                     "contour": contour
                 })
-            
-            annotation["nodules"].append(nodule_entry)
+                
+            if len(nodule_entry['slices']) > 0:
+                annotation['nodules'].append(nodule_entry)
     
     return annotation
 
-def save_annotation(annotation: dict, output_dir=Path):
+def save_annotation(annotation: dict, output_dir:Path):
     output_dir.mkdir(parents=True, exist_ok=True)
 
     output_path = output_dir/f"{annotation['patient_id']}.json"
