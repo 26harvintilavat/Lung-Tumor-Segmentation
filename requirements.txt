@@ -6,3 +6,4 @@ pydicom
 pylidc
 matplotlib
 nibabel
+torch
