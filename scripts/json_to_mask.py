@@ -69,6 +69,10 @@ def save_mask(mask, patient_id):
     print(f"Saved mask: {path}")
 
 def find_series_dir(raw_patient_dir, target_series_uid):
+
+    if not raw_patient_dir.exists():
+        return None
+    
     for d in raw_patient_dir.iterdir():
         if d.is_dir() and d.name == target_series_uid:
             return d
