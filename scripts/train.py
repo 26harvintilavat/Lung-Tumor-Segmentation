@@ -13,6 +13,7 @@ from configs.config import RAW_DATA_DIR, MASK_DIR
 from src.train_dataset import LungSegmentationDataset
 from src.model import UNet
 from scripts.prepare_dataloaders import get_patient_ids, split_patients
+from src.losses import DiceLoss
 
 BATCH_SIZE = 4
 LR = 1e-4
@@ -21,7 +22,7 @@ VAL_SPLIT = 0.2
 SEED = 42
 
 # Train one epoch
-def train_one_epoch(model, loader, optimizer, criterion, device):
+def train_one_epoch(model, loader, optimizer, bce_loss, dice_loss, device):
     model.train()
     total_loss = 0
 
@@ -30,7 +31,7 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
         masks = masks.to(device)
 
         outputs = model(images)
-        loss = criterion(outputs, masks)
+        loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
 
         optimizer.zero_grad()
         loss.backward()
@@ -41,7 +42,7 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
     return total_loss/len(loader)
 
 # Validation
-def validate(model, loader, criterion, device):
+def validate(model, loader, bce_loss, dice_loss, device):
     model.eval()
     total_loss = 0
 
@@ -51,7 +52,7 @@ def validate(model, loader, criterion, device):
             masks = masks.to(device)
 
             outputs = model(images)
-            loss = criterion(outputs, masks)
+            loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
 
             total_loss += loss.item()
     
@@ -87,15 +88,16 @@ def main():
     model = UNet(in_channels=1, out_channels=1).to(device)
 
     # Loss & optimizer
-    criterion = nn.BCEWithLogitsLoss()
+    bce_loss = nn.BCEWithLogitsLoss()
+    dice_loss = DiceLoss()
     optimizer = Adam(model.parameters(), lr=LR)
 
     print("\nStarting training...\n")
 
     # Epoch loop
     for epoch in range(EPOCHS):
-        train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device)
-        val_loss = validate(model, val_loader, criterion, device)
+        train_loss = train_one_epoch(model, train_loader, optimizer, bce_loss, dice_loss, device)
+        val_loss = validate(model, val_loader, bce_loss, dice_loss, device)
 
         print(f"Epoch [{epoch+1}/{EPOCHS}]"
               f"Train Loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
