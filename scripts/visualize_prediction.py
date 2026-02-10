@@ -14,13 +14,27 @@ from src.model import UNet
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+def load_model(device):
+    model = UNet(in_channels=1, out_channels=1).to(device)
+
+    checkpoint_path = Path("checkpoints/best_model.pth")
+
+    if checkpoint_path.exists():
+        model.load_state_dict(
+            torch.load(checkpoint_path, map_location=device)
+        )
+        print(f"Loaded model from {checkpoint_path}")
+    else:
+        print("Warning: No checkpoint found. Using random weights.")
+
+    model.eval()
+    return model
+
 def visualize_patient(patient_id, max_slices=3):
     print(f"\nPatient: {patient_id}")
     dataset = LungSegmentationDataset(RAW_DATA_DIR, MASK_DIR, [patient_id])
 
-    model = UNet(in_channels=1, out_channels=1).to(device)
-
-    model.eval()
+    model = load_model(device)
     shown = 0
 
     for i in range(len(dataset)):
@@ -34,7 +48,7 @@ def visualize_patient(patient_id, max_slices=3):
 
         with torch.no_grad():
             output = model(image_tensor)
-        pred = torch.sigmoid(output)
+            pred = torch.sigmoid(output)
 
         image = image.squeeze().numpy()
         mask = mask.squeeze().numpy()
@@ -49,7 +63,7 @@ def visualize_patient(patient_id, max_slices=3):
 
         plt.subplot(1, 3, 2)
         plt.title("Ground Truth")
-        plt.imshow(mask, cmap="grey")
+        plt.imshow(image, cmap="gray")
         plt.imshow(mask, cmap="jet", alpha=0.5)
         plt.axis("off")
 
