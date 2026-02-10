@@ -4,6 +4,7 @@ from pathlib import Path
 from tcia_utils import nbia
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
+from configs.config import RAW_DATA_DIR, ANNOTATION_DIR, MASK_DIR
 import numpy as np
 from skimage.draw import polygon
 from src.dataset import LungCTDataset
@@ -61,7 +62,7 @@ def build_mask_from_json(json_path, series_dir):
     return mask_volume
 
 def save_mask(mask, patient_id):
-    out_dir = Path("data/masks")
+    out_dir = MASK_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
     path = out_dir/f"{patient_id}_mask.npy"
@@ -83,7 +84,7 @@ def download_series_if_missing(patient_id, series_uid, raw_dir):
     patient_dir.mkdir(parents=True, exist_ok=True)
 
     series_dir = patient_dir / series_uid
-    if series_dir.exists():
+    if series_dir.exists() and any(series_dir.rglob("*.dcm")):
         return series_dir
 
     print(f"Downloading CT series for {patient_id}")
@@ -97,8 +98,8 @@ def download_series_if_missing(patient_id, series_uid, raw_dir):
 
 
 def main():
-    annotation_dir = Path("data/annotations")
-    raw_dir = Path("data/raw")
+    annotation_dir = ANNOTATION_DIR
+    raw_dir = RAW_DATA_DIR
 
     for json_file in annotation_dir.glob("*.json"):
         with open(json_file, 'r') as f:
@@ -114,6 +115,11 @@ def main():
 
         if series_dir is None:
             print(f"Failed to obtain series for {patient_id}")
+            continue
+
+        mask_path = MASK_DIR/f"{patient_id}_mask.npy"
+        if mask_path.exists():
+            print(f"Mask already exists for {patient_id}, skipping")
             continue
 
         mask = build_mask_from_json(json_file, series_dir)
