@@ -19,6 +19,10 @@ SEED = 42
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)
 
+if device.type == "cuda":
+    torch.backends.cudnn.benchmark = True
+
+
 def get_patient_ids(mask_dir):
     patient_ids = []
     for p in mask_dir.glob("*_mask.npy"):
@@ -77,6 +81,8 @@ def main():
 
     print("Train samples:", len(train_dataset))
     print("Val samples:", len(val_dataset))
+
+    images, masks = next(iter(train_loader))
 
     images = images.to(device)
     masks = masks.to(device)
