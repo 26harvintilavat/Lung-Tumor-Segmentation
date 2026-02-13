@@ -3,6 +3,8 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 from src.dataset import LungCTDataset
+import torchvision.transforms as T
+from torchvision.transforms import InterpolationMode
 
 class LungSegmentationDataset(Dataset):
     "Returns (image, mask) slice pairs for training"
@@ -11,6 +13,12 @@ class LungSegmentationDataset(Dataset):
         self.raw_dir = Path(raw_dir)
         self.mask_dir = Path(mask_dir)
         self.samples = []
+
+        self.volume_cache = {}
+        self.mask_cache = {}
+
+        self.img_resize = T.Resize((256, 256), interpolation=InterpolationMode.BILINEAR)
+        self.mask_resize = T.Resize((256, 256), interpolation=InterpolationMode.NEAREST)
 
         for pid in patient_ids:
             patient_raw_dir = self.raw_dir/pid
@@ -33,34 +41,46 @@ class LungSegmentationDataset(Dataset):
 
             mask = np.load(mask_path)
 
+            self.volume_cache[pid] = volume
+            self.mask_cache[pid] = mask
+
             # store slice-level samples
             for z in range(volume.shape[0]):
-                self.samples.append({
-                    "series_dir": series_dir,
-                    "mask_path": mask_path,
-                    "slice_idx": z
-                })
+                if mask[z].sum() > 0:
+                    self.samples.append({
+                        "pid": pid,
+                        "slice_idx": z
+                    })
+            print(f"Total tumor slices: {len(self.samples)}")
 
     def __len__(self):
         return len(self.samples)
     
     def __getitem__(self, idx):
         sample = self.samples[idx]
+        pid = sample["pid"]
+        z = sample["slice_idx"]
 
-        dataset = LungCTDataset(sample['series_dir'])
-        volume = dataset.volume
+       # get from cache(no disk loading)
+        volume = self.volume_cache[pid]
+        mask = self.mask_cache[pid]
 
-        mask = np.load(sample['mask_path'])
+        image = volume[z]
+        mask = mask[z]
 
-        image = volume[sample['slice_idx']]
-        mask = mask[sample['slice_idx']]
-
-        # normalize image
+        # normalize
         image = image.astype(np.float32)
         mask = mask.astype(np.float32)
 
-        # add channel dimension -> (1, H, W)
+        # add channel dimenstion
         image = np.expand_dims(image, axis=0)
         mask = np.expand_dims(mask, axis=0)
 
-        return torch.from_numpy(image), torch.from_numpy(mask)
+        image = torch.from_numpy(image)
+        mask = torch.from_numpy(mask)
+
+        # resize
+        image = self.img_resize(image)
+        mask = self.mask_resize(mask)
+
+        return image, mask
