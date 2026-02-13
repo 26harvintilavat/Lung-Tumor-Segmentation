@@ -36,8 +36,9 @@ class LungSegmentationDataset(Dataset):
             # store slice-level samples
             for z in range(volume.shape[0]):
                 self.samples.append({
-                    "image": volume[z],
-                    "mask": mask[z]
+                    "series_dir": series_dir,
+                    "mask_path": mask_path,
+                    "slice_idx": z
                 })
 
     def __len__(self):
@@ -46,8 +47,13 @@ class LungSegmentationDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
 
-        image = sample["image"]
-        mask = sample["mask"]
+        dataset = LungCTDataset(sample['series_dir'])
+        volume = dataset.volume
+
+        mask = np.load(sample['mask_path'])
+
+        image = volume[sample['slice_idx']]
+        mask = mask[sample['slice_idx']]
 
         # normalize image
         image = image.astype(np.float32)
