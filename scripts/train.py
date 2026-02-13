@@ -24,8 +24,8 @@ def train_one_epoch(model, loader, optimizer, bce_loss, dice_loss, device):
     progress_bar = tqdm(loader, desc="Training", leave=False)
 
     for images, masks in progress_bar:
-        images = images.to(device)
-        masks = masks.to(device)
+        images = images.to(device, non_blocking=True)
+        masks = masks.to(device, non_blocking=True)
 
         outputs = model(images)
         loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
@@ -64,6 +64,9 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
+
     # Patients
     patient_ids = get_patient_ids(MASK_DIR)
     train_ids, val_ids = split_patients(patient_ids, VAL_SPLIT, SEED)
@@ -72,15 +75,35 @@ def main():
     print("Val patients:", val_ids)
 
     # Datasets 
+    print("Creating train dataset...")
     train_dataset = LungSegmentationDataset(RAW_DATA_DIR, MASK_DIR, train_ids)
+    print("Train dataset created")
+
+    print("Creating val dataset...")
     val_dataset = LungSegmentationDataset(RAW_DATA_DIR, MASK_DIR, val_ids)
+    print("Val dataset created")
 
     print("Train samples:", len(train_dataset))
     print("Val samples:", len(val_dataset))
 
     # DataLoaders
-    train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
-    val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
+    train_loader = DataLoader(
+        train_dataset, 
+        batch_size=BATCH_SIZE, 
+        shuffle=True,
+        num_workers=2,
+        pin_memory=True,
+        persistent_workers=True
+        )
+    
+    val_loader = DataLoader(
+        val_dataset, 
+        batch_size=BATCH_SIZE, 
+        shuffle=False,
+        num_workers=2,
+        pin_memory=True,
+        persistent_workers=True
+        )
 
     print("Train batches:", len(train_loader))
     print("Val batches:", len(val_loader))
