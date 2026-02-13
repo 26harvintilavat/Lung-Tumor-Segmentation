@@ -61,20 +61,22 @@ def main():
         train_dataset,
         batch_size=BATCH_SIZE,
         shuffle=True,
-        num_workers=0
+        num_workers=2,
+        pin_memory=True,
+        persistent_workers=True
     )
 
     val_loader = DataLoader(
         val_dataset,
         batch_size=BATCH_SIZE,
         shuffle=False,
-        num_workers=0
+        num_workers=2,
+        pin_memory=True,
+        persistent_workers=True
     )
 
     print("Train samples:", len(train_dataset))
     print("Val samples:", len(val_dataset))
-
-    images, masks = next(iter(train_loader))
 
     images = images.to(device)
     masks = masks.to(device)
