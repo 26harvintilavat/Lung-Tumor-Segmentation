@@ -10,11 +10,7 @@ sys.path.append(str(PROJECT_ROOT))
 
 from src.train_dataset import LungSegmentationDataset
 
-from configs.config import RAW_DATA_DIR, MASK_DIR
-
-BATCH_SIZE = 4
-VAL_SPLIT = 0.2
-SEED = 42
+from configs.config import RAW_DATA_DIR, MASK_DIR, BATCH_SIZE, VAL_SPLIT, SEED
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print("Using device:", device)

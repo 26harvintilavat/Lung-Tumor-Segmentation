@@ -1,9 +1,3 @@
-"""
-Configuration file for TCIA dataset download.
-
-Modify these settings according to your needs.
-"""
-
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
