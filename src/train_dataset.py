@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 from src.dataset import LungCTDataset
 import torchvision.transforms as T
 from torchvision.transforms import InterpolationMode
+import random
 
 class LungSegmentationDataset(Dataset):
     "Returns (image, mask) slice pairs for training"
@@ -13,9 +14,6 @@ class LungSegmentationDataset(Dataset):
         self.raw_dir = Path(raw_dir)
         self.mask_dir = Path(mask_dir)
         self.samples = []
-
-        self.volume_cache = {}
-        self.mask_cache = {}
 
         self.img_resize = T.Resize((256, 256), interpolation=InterpolationMode.BILINEAR)
         self.mask_resize = T.Resize((256, 256), interpolation=InterpolationMode.NEAREST)
@@ -30,10 +28,6 @@ class LungSegmentationDataset(Dataset):
 
             series_dir = series_dirs[0]
 
-            # load CT volume
-            dataset = LungCTDataset(series_dir)
-            volume = dataset.volume
-
             # load mask
             mask_path = self.mask_dir/f"{pid}_mask.npy"
             if not mask_path.exists():
@@ -41,17 +35,38 @@ class LungSegmentationDataset(Dataset):
 
             mask = np.load(mask_path)
 
-            self.volume_cache[pid] = volume
-            self.mask_cache[pid] = mask
-
             # store slice-level samples
-            for z in range(volume.shape[0]):
+            tumor_slices = []
+            non_tumor_slices = []
+
+            for z in range(mask.shape[0]):
                 if mask[z].sum() > 0:
-                    self.samples.append({
-                        "pid": pid,
-                        "slice_idx": z
-                    })
-            print(f"Total tumor slices: {len(self.samples)}")
+                    tumor_slices.append(z)
+                else:
+                    non_tumor_slices.append(z)
+
+            # Add all tumor slices
+            for z in tumor_slices:
+                self.samples.append({
+                    "pid": pid,
+                    "slice_idx": z,
+                    "series_dir": series_dir,
+                    "mask_path": mask_path
+                })
+
+            # Add 2x non-tumor slices
+            num_bg = min(len(non_tumor_slices), 2 * len(tumor_slices))
+            bg_selected = random.sample(non_tumor_slices, num_bg)
+
+            for z in bg_selected:
+                self.samples.append({
+                    "pid": pid,
+                    "slice_idx": z,
+                    "series_dir": series_dir,
+                    "mask_path": mask_path
+                })
+
+            print(f"Total training slices: {len(self.samples)}")
 
     def __len__(self):
         return len(self.samples)
@@ -60,13 +75,16 @@ class LungSegmentationDataset(Dataset):
         sample = self.samples[idx]
         pid = sample["pid"]
         z = sample["slice_idx"]
+        series_dir = sample['series_dir']
+        mask_path = sample['mask_path']
 
-       # get from cache(no disk loading)
-        volume = self.volume_cache[pid]
-        mask = self.mask_cache[pid]
+        # Load CT volume only when needed
+        dataset = LungCTDataset(series_dir)
+        image = dataset.volume[z]
 
-        image = volume[z]
-        mask = mask[z]
+        # Load mask slice
+        mask_volume = np.load(mask_path)
+        mask = mask_volume[z]
 
         # normalize
         image = image.astype(np.float32)
