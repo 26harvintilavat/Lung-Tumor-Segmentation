@@ -119,9 +119,32 @@ def main():
     save_dir = Path("checkpoints")
     save_dir.mkdir(exist_ok=True)
 
+    checkpoint_path = save_dir/"best_model.pth"
+    start_epoch = 0
+
     best_val_loss = float("inf")
 
     print("\nStarting training...\n")
+
+    if checkpoint_path.exists():
+        print(f"Checkpoints found at {checkpoint_path}")
+
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+
+        if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+            start_epoch = checkpoint['epoch'] + 1
+            best_val_loss = checkpoint.get("best_dice", float('inf'))
+ 
+            print(f"Resuming from epoch {start_epoch}")
+
+        else:
+            model.load_state_dict(checkpoint)
+            print("Loaded weights only. Optimizer reinitialized.")
+
+    else:
+        print("No checkpoint found. Starting training from scratch.")
 
     # Epoch loop
     for epoch in range(EPOCHS):
@@ -137,7 +160,12 @@ def main():
         if val_loss < best_val_loss:
             best_val_loss = val_loss
             save_path = save_dir/"best_model.pth"
-            torch.save(model.state_dict(), save_path)
+            torch.save({
+                'epoch': epoch,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'best_dice': best_val_loss
+            }, checkpoint_path)
             print(f"Model saved at {save_path}")
 
 if __name__ == "__main__":
