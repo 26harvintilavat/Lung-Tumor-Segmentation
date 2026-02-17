@@ -15,6 +15,7 @@ from src.model import UNet
 from scripts.prepare_dataloaders import get_patient_ids, split_patients
 from src.losses import DiceLoss
 from tqdm import tqdm
+import matplotlib.pyplot as plt
 
 # Train one epoch
 def train_one_epoch(model, loader, optimizer, bce_loss, dice_loss, device):
@@ -124,6 +125,9 @@ def main():
 
     best_val_loss = float("inf")
 
+    train_losses = []
+    val_losses = []
+
     print("\nStarting training...\n")
 
     if checkpoint_path.exists():
@@ -135,38 +139,53 @@ def main():
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
             start_epoch = checkpoint['epoch'] + 1
-            best_val_loss = checkpoint.get("best_dice", float('inf'))
+            best_val_loss = checkpoint.get("best_val_loss", float('inf'))
  
             print(f"Resuming from epoch {start_epoch}")
 
         else:
             model.load_state_dict(checkpoint)
+            start_epoch = 0
             print("Loaded weights only. Optimizer reinitialized.")
 
     else:
         print("No checkpoint found. Starting training from scratch.")
 
     # Epoch loop
-    for epoch in range(EPOCHS):
+    for epoch in range(start_epoch, EPOCHS):
         print(f"\nEpoch [{epoch+1}/{EPOCHS}]")
 
         train_loss = train_one_epoch(model, train_loader, optimizer, bce_loss, dice_loss, device)
 
         val_loss = validate(model, val_loader, bce_loss, dice_loss, device)
 
+        train_losses.append(train_loss)
+        val_losses.append(val_loss)
+
         print(f"Train loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
 
         # save best model
         if val_loss < best_val_loss:
             best_val_loss = val_loss
-            save_path = save_dir/"best_model.pth"
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'best_dice': best_val_loss
+                'best_val_loss': best_val_loss
             }, checkpoint_path)
-            print(f"Model saved at {save_path}")
+            print(f"Model saved at {checkpoint_path}")
+
+    plt.figure()
+    plt.plot(train_losses, label="Train Loss")
+    plt.plot(val_losses, label="val_loss")
+    plt.xlabel("Epoch")
+    plt.ylabel("Loss")
+    plt.legend()
+    plt.title("Training Curve")
+
+    plot_path = save_dir/"training_curve.png"
+    plt.savefig(plot_path)
+    print(f"Training curve saved at {plot_path}")
 
 if __name__ == "__main__":
     main()
