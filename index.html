@@ -1,0 +1,366 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LungSeg AI | Lung Tumor Segmentation</title>
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Syne:wght@400..800&display=swap"
+        rel="stylesheet">
+
+    <!-- Cornerstone Core -->
+    <script src="https://unpkg.com/cornerstone-core@2.6.1/dist/cornerstone.js"></script>
+
+    <!-- dicomParser -->
+    <script src="https://unpkg.com/dicom-parser@1.8.13/dist/dicomParser.js"></script>
+
+    <!-- Cornerstone WADO Image Loader -->
+    <script src="https://unpkg.com/cornerstone-wado-image-loader@3.3.1/dist/cornerstoneWADOImageLoader.min.js"></script>
+
+    <!-- App Styles -->
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+    <!-- Backend Status Banner -->
+    <div id="backendBanner" class="backend-banner hidden">
+        Backend offline — start FastAPI server on port 8000
+    </div>
+
+    <!-- Toast Container -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <!-- Navigation Bar -->
+    <nav id="navbar" class="navbar">
+        <div class="nav-brand">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
+                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                class="lucide lucide-lungs">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+                <path d="M12 6v12" />
+            </svg>
+            <span>LungSeg AI</span>
+        </div>
+        <ul class="nav-links">
+            <li><a href="#home" class="nav-link">Home</a></li>
+            <li><a href="#upload" class="nav-link">Upload</a></li>
+            <li><a href="#viewer" class="nav-link">Viewer</a></li>
+            <li><a href="#pipeline" class="nav-link">Pipeline</a></li>
+            <li><a href="#about" class="nav-link">About</a></li>
+        </ul>
+    </nav>
+
+    <!-- Main Content Area -->
+    <main id="appContent">
+
+        <!-- =================== PAGE 1: LANDING / HOME =================== -->
+        <section id="page-home" class="page-section active">
+            <div class="hero-bg-grid"></div>
+            <div class="hero-content">
+                <span class="badge">LIDC-IDRI Dataset · U-Net Segmentation</span>
+                <h1 class="hero-title">Lung Tumor Segmentation</h1>
+                <p class="hero-subtitle">Upload a CT scan. Get tumor segmentation in seconds.</p>
+                <a href="#upload" class="btn-primary cta-btn">Upload CT Scan &rarr;</a>
+
+                <div class="stat-cards">
+                    <div class="stat-card">
+                        <span class="stat-label">Modality</span>
+                        <span class="stat-value">CT</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Format</span>
+                        <span class="stat-value">DICOM / NIfTI</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Pipeline</span>
+                        <span class="stat-value">End-to-End</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================== PAGE 2: UPLOAD =================== -->
+        <section id="page-upload" class="page-section hidden">
+            <div class="upload-container">
+                <div class="upload-header">
+                    <h2 class="page-title">Initiate Analysis</h2>
+                    <p class="page-subtitle">Select a single DICOM file or an entire directory.</p>
+                </div>
+
+                <div id="dropzone" class="dropzone">
+                    <input type="file" id="fileInput" class="hidden-input" accept=".dcm,.nii,.nii.gz" multiple>
+                    <div class="dropzone-content" id="dropzoneContent">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
+                            class="lucide lucide-upload-cloud">
+                            <polyline points="16 16 12 12 8 16" />
+                            <line x1="12" x2="12" y1="12" y2="21" />
+                            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
+                            <polyline points="16 16 12 12 8 16" />
+                        </svg>
+                        <h3>Drop DICOM files here</h3>
+                        <p class="supported-formats">or click to browse</p>
+                    </div>
+                    <div id="fileList" class="file-list hidden">
+                        <!-- Populated by JS -->
+                    </div>
+                </div>
+
+                <div class="upload-controls">
+                    <div class="input-group">
+                        <label for="patientId">Patient ID <span class="optional">(optional)</span></label>
+                        <input type="text" id="patientId" placeholder="e.g. PT-20240001">
+                    </div>
+
+                    <div class="input-group">
+                        <label for="presetSelect">Windowing Preset</label>
+                        <select id="presetSelect">
+                            <option value="lung">Lung Window (WW: 1500, WL: -600)</option>
+                            <option value="mediastinal">Mediastinal Window (WW: 400, WL: 40)</option>
+                            <option value="bone">Bone Window (WW: 2000, WL: 400)</option>
+                            <option value="custom">Custom...</option>
+                        </select>
+                    </div>
+
+                    <div class="custom-windowing hidden" id="customWindowing">
+                        <div class="input-group small">
+                            <label for="customWW">Window Width</label>
+                            <input type="number" id="customWW" value="1500">
+                        </div>
+                        <div class="input-group small">
+                            <label for="customWL">Window Level</label>
+                            <input type="number" id="customWL" value="-600">
+                        </div>
+                    </div>
+                </div>
+
+                <button id="runSegmentationBtn" class="btn-primary run-btn" disabled>
+                    Run Segmentation &rarr;
+                </button>
+            </div>
+
+            <!-- Loading Spinner Overlay -->
+            <div id="uploadLoader" class="loader-overlay hidden">
+                <div class="spinner"></div>
+                <h3 id="loaderText" class="loader-text">Uploading CT scan...</h3>
+            </div>
+        </section>
+
+        <!-- =================== PAGE 3: VIEWER =================== -->
+        <section id="page-viewer" class="page-section hidden viewer-layout">
+
+            <!-- Left Panel: Navigator -->
+            <aside class="viewer-panel left-panel">
+                <div class="panel-header">Slice Navigator</div>
+                <div id="thumbnailContainer" class="thumbnail-list">
+                    <!-- Thumbnails generated here -->
+                </div>
+            </aside>
+
+            <!-- Center Panel: Main Viewer -->
+            <div class="viewer-main">
+                <div class="viewer-toolbar">
+                    <div class="toolbar-group">
+                        <button id="toggleMaskBtn" class="btn-tool active">Mask ON</button>
+                        <div class="slider-group">
+                            <label for="maskOpacity">Opacity</label>
+                            <input type="range" id="maskOpacity" min="0" max="1" step="0.05" value="0.45">
+                        </div>
+                    </div>
+                    <div class="toolbar-group">
+                        <button id="resetViewBtn" class="btn-tool" title="Reset View">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                                <path d="M3 3v5h5" />
+                            </svg>
+                        </button>
+                        <button id="invertBtn" class="btn-tool" title="Invert Colors">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
+                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+                                stroke-linejoin="round">
+                                <circle cx="12" cy="12" r="10" />
+                                <path
+                                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="window-display">
+                        WW: <span id="wwDisplay">1500</span> | WL: <span id="wlDisplay">-600</span>
+                    </div>
+                </div>
+
+                <div class="dicom-container" id="dicomWrapper">
+                    <div id="dicomViewport" class="cornerstone-element" oncontextmenu="return false;"></div>
+                    <canvas id="maskCanvas" class="mask-overlay"></canvas>
+                </div>
+
+                <div class="viewer-footer">
+                    <button id="prevSliceBtn" class="btn-tool circle">&larr;</button>
+                    <input type="range" id="sliceScrubber" class="scrubber" min="1" max="100" value="1">
+                    <button id="nextSliceBtn" class="btn-tool circle">&rarr;</button>
+                    <span id="sliceIndicator" class="slice-indicator">Slice 1 / 100</span>
+                </div>
+            </div>
+
+            <!-- Right Panel: Stats -->
+            <aside class="viewer-panel right-panel">
+                <div class="card patient-card">
+                    <h4>Patient Info</h4>
+                    <div class="info-row"><span class="label">ID</span><span id="v_patientId" class="value">--</span>
+                    </div>
+                    <div class="info-row"><span class="label">Series</span><span id="v_seriesUid" class="value"
+                            title="">--</span></div>
+                    <div class="info-row"><span class="label">Slices</span><span id="v_totalSlices"
+                            class="value">--</span></div>
+                    <div class="info-row"><span class="label">Thickness</span><span id="v_thickness" class="value">--
+                            mm</span></div>
+                </div>
+
+                <div class="card metrics-card">
+                    <h4>Tumor Metrics</h4>
+                    <div class="info-row"><span class="label">Detected Nodules</span><span id="v_nodules"
+                            class="value highlight">--</span></div>
+                    <div class="info-row"><span class="label">Tumor Volume</span><span id="v_volume"
+                            class="value highlight">-- cm³</span></div>
+                    <div class="info-row"><span class="label">Max Diameter</span><span id="v_diameter" class="value">--
+                            mm</span></div>
+                    <div class="info-row"><span class="label">Slice Range</span><span id="v_range"
+                            class="value">--</span></div>
+
+                    <div class="confidence-section">
+                        <div class="conf-header">
+                            <span class="label">AI Confidence</span>
+                            <span id="v_confidenceVal" class="value">--%</span>
+                        </div>
+                        <div class="conf-bar-bg">
+                            <div id="v_confidenceBar" class="conf-bar-fill"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="action-buttons">
+                    <button id="downloadMaskBtn" class="btn-secondary outline">Download Mask (.npy)</button>
+                    <button id="downloadReportBtn" class="btn-secondary outline">Download Report (.txt)</button>
+                </div>
+
+                <div class="history-section">
+                    <h4>Run History</h4>
+                    <div class="table-container">
+                        <table id="historyTable" class="history-table">
+                            <thead>
+                                <tr>
+                                    <th>Patient</th>
+                                    <th>Date</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyTbody">
+                                <!-- Populated from localStorage -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </aside>
+
+        </section>
+
+        <!-- =================== PAGE 4: PIPELINE STATUS =================== -->
+        <section id="page-pipeline" class="page-section hidden">
+            <div class="pipeline-container">
+                <h2 class="page-title">Pipeline Status</h2>
+
+                <div class="pipeline-split">
+                    <!-- Stepper -->
+                    <div class="stepper">
+                        <ul id="pipelineSteps" class="step-list">
+                            <li class="step pending" data-step="1"><span class="icon">⏳</span> DICOM Upload</li>
+                            <li class="step pending" data-step="2"><span class="icon">⏳</span> XML Annotation Parsing
+                            </li>
+                            <li class="step pending" data-step="3"><span class="icon">⏳</span> CT Series Resolution</li>
+                            <li class="step pending" data-step="4"><span class="icon">⏳</span> Mask Generation</li>
+                            <li class="step pending" data-step="5"><span class="icon">⏳</span> HU Preprocessing</li>
+                            <li class="step pending" data-step="6"><span class="icon">⏳</span> Model Inference</li>
+                            <li class="step pending" data-step="7"><span class="icon">⏳</span> Post-processing</li>
+                            <li class="step pending" data-step="8"><span class="icon">⏳</span> Results Ready</li>
+                        </ul>
+                        <button id="rerunPipelineBtn" class="btn-secondary block mt-2">Re-run Pipeline</button>
+                    </div>
+
+                    <!-- Terminal -->
+                    <div class="terminal-container">
+                        <div class="terminal-header">
+                            <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
+                            <span class="terminal-title">System Logs</span>
+                        </div>
+                        <div id="terminalConsole" class="terminal-body">
+                            <div class="log-line system">LungSeg AI backend connection established.</div>
+                            <div class="log-line system">Waiting for job...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================== PAGE 5: ABOUT =================== -->
+        <section id="page-about" class="page-section hidden">
+            <div class="about-container">
+                <h2 class="page-title">About the Project</h2>
+
+                <div class="about-grid">
+                    <div class="about-col">
+                        <h3>LungSeg AI</h3>
+                        <p>A medical imaging pipeline and viewer designed for the automated segmentation of lung tumors
+                            from CT scans. It streamlines the diagnostic workflow by isolating nodules and computing
+                            volumetric metrics automatically.</p>
+
+                        <h4 class="mt-2">Dataset</h4>
+                        <p>Powered by the <strong>LIDC-IDRI</strong> dataset from The Cancer Imaging Archive (TCIA).
+                            Consisting of diagnostic and lung cancer screening thoracic CT scans with marked-up
+                            annotated lesions.</p>
+
+                        <h4 class="mt-2">Interpretability</h4>
+                        <p>All masks are generated using a 3D architecture tracking HU densities across the axial
+                            series. Detected volumes provide estimations critical for tracking morphological
+                            progression.</p>
+                    </div>
+
+                    <div class="about-col card">
+                        <h3>Model Architecture</h3>
+                        <ul class="tech-list">
+                            <li><strong>Type:</strong> U-Net (PyTorch)</li>
+                            <li><strong>Input:</strong> Normalized CT Volume (HU mapped)</li>
+                            <li><strong>Output:</strong> Binary Segmentation Map (.npy)</li>
+                        </ul>
+
+                        <h3 class="mt-2">Tech Stack</h3>
+                        <ul class="tech-list">
+                            <li><strong>Frontend:</strong> Vanilla JS, HTML5 Canvas, CSS Variables</li>
+                            <li><strong>Viewer:</strong> Cornerstone.js Core</li>
+                            <li><strong>Parser:</strong> dicomParser</li>
+                            <li><strong>Backend:</strong> Python, FastAPI</li>
+                        </ul>
+
+                        <div class="author-credits mt-2">
+                            <p>Created by <strong>Harvin Tilavat</strong></p>
+                            <a href="https://github.com/26harvintilavat/Lung-Tumor-Segmentation" target="_blank"
+                                class="btn-secondary outline mt-1">View on GitHub</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- App Logic -->
+    <script src="app.js"></script>
+</body>
+
+</html>
