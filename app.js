@@ -16,6 +16,7 @@ let maskOpacity = 0.45;
 let isMaskVisible = true;
 let isPipelineRunning = false;
 let pollingInterval = null;
+let trainPollingInterval = null;
 
 // --- DOM ELEMENTS (Cached) ---
 const el = {
@@ -69,10 +70,30 @@ const el = {
     downloadReportBtn: document.getElementById('downloadReportBtn'),
     historyTbody: document.getElementById('historyTbody'),
 
-    // Pipeline
     pipelineSteps: document.querySelectorAll('#pipelineSteps .step'),
     terminalConsole: document.getElementById('terminalConsole'),
-    rerunPipelineBtn: document.getElementById('rerunPipelineBtn')
+    rerunPipelineBtn: document.getElementById('rerunPipelineBtn'),
+
+    // Training
+    trainEpochs: document.getElementById('trainEpochs'),
+    trainBatch: document.getElementById('trainBatch'),
+    trainLR: document.getElementById('trainLR'),
+    trainLoss: document.getElementById('trainLoss'),
+    trainRemoveEmpty: document.getElementById('trainRemoveEmpty'),
+    gpuStatusBadge: document.getElementById('gpuStatusBadge'),
+    startTrainingBtn: document.getElementById('startTrainingBtn'),
+
+    // Training Progress
+    trainingNotStarted: document.getElementById('trainingNotStarted'),
+    trainingActive: document.getElementById('trainingActive'),
+    trainEpochDisplay: document.getElementById('trainEpochDisplay'),
+    trainEtaDisplay: document.getElementById('trainEtaDisplay'),
+    trainProgressBar: document.getElementById('trainProgressBar'),
+    metricTrainLoss: document.getElementById('metricTrainLoss'),
+    metricValDice: document.getElementById('metricValDice'),
+    metricValIou: document.getElementById('metricValIou'),
+    trainingCompleteAction: document.getElementById('trainingCompleteAction'),
+    finalBestDice: document.getElementById('finalBestDice')
 };
 
 
@@ -86,6 +107,7 @@ document.addEventListener('DOMContentLoaded', () => {
     initUploadEvents();
     initViewerEvents();
     initPipelineEvents();
+    initTrainingEvents();
     loadRunHistory();
     checkBackendStatus();
 });
@@ -452,6 +474,131 @@ function initPipelineEvents() {
             showToast("Pipeline is already running.", "warning");
         }
     });
+}
+
+
+// ==========================================
+// MODEL TRAINING API
+// ==========================================
+
+function initTrainingEvents() {
+    el.startTrainingBtn.addEventListener('click', startModelTraining);
+    checkHardwareStatus();
+}
+
+async function checkHardwareStatus() {
+    try {
+        const res = await fetch(`${API_BASE_URL}/gpu_status`);
+        if (res.ok) {
+            const data = await res.json();
+            el.gpuStatusBadge.textContent = data.message;
+            el.gpuStatusBadge.className = `badge-status ${data.available ? 'gpu' : 'cpu'}`;
+        }
+    } catch (e) {
+        el.gpuStatusBadge.textContent = "Status Unknown";
+        el.gpuStatusBadge.className = "badge-status checking";
+    }
+}
+
+async function startModelTraining() {
+    const epochs = parseInt(el.trainEpochs.value) || 50;
+    const batchSize = parseInt(el.trainBatch.value) || 8;
+    const lr = parseFloat(el.trainLR.value) || 0.0001;
+    const lossFn = el.trainLoss.value;
+    const removeEmpty = el.trainRemoveEmpty.checked;
+
+    el.startTrainingBtn.disabled = true;
+    el.startTrainingBtn.textContent = "Starting...";
+
+    // UI Transitions
+    el.trainingNotStarted.classList.add('hidden');
+    el.trainingActive.classList.remove('hidden');
+    el.trainingCompleteAction.classList.add('hidden');
+
+    // Reset Progress Metrics
+    el.trainProgressBar.style.width = '0%';
+    el.trainEpochDisplay.textContent = `Epoch 0 / ${epochs}`;
+    el.metricTrainLoss.textContent = '--';
+    el.metricValDice.textContent = '--';
+    el.metricValIou.textContent = '--';
+
+    try {
+        const res = await fetch(`${API_BASE_URL}/train`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                epochs: epochs,
+                batch_size: batchSize,
+                learning_rate: lr,
+                loss_function: lossFn,
+                remove_empty_slices: removeEmpty
+            })
+        });
+
+        if (!res.ok) throw new Error("Failed to start training.");
+        pollTrainingStatus(epochs);
+
+    } catch (e) {
+        showToast(e.message, 'error');
+        el.startTrainingBtn.disabled = false;
+        el.startTrainingBtn.textContent = "Start Training \u2192";
+        el.trainingNotStarted.classList.remove('hidden');
+        el.trainingActive.classList.add('hidden');
+    }
+}
+
+function pollTrainingStatus(totalEpochs) {
+    if (trainPollingInterval) clearInterval(trainPollingInterval);
+
+    trainPollingInterval = setInterval(async () => {
+        try {
+            const res = await fetch(`${API_BASE_URL}/train_status`);
+            if (res.ok) {
+                const data = await res.json();
+
+                if (data.status === 'idle') {
+                    // Not started or crashed before writing state
+                    return;
+                }
+
+                // Update UI based on polled data
+                const currentEpoch = data.current_epoch || 0;
+
+                // Calculate Progress Percentage safely
+                let progressPercent = 0;
+                if (currentEpoch > 0) {
+                    progressPercent = Math.min((currentEpoch / totalEpochs) * 100, 100);
+                }
+
+                el.trainProgressBar.style.width = `${progressPercent}%`;
+                el.trainEpochDisplay.textContent = `Epoch ${currentEpoch} / ${totalEpochs}`;
+
+                if (data.train_loss !== null) el.metricTrainLoss.textContent = data.train_loss.toFixed(4);
+                if (data.val_dice !== null) el.metricValDice.textContent = data.val_dice.toFixed(4);
+                if (data.val_iou !== null) el.metricValIou.textContent = data.val_iou.toFixed(4);
+
+                if (data.status === 'completed') {
+                    clearInterval(trainPollingInterval);
+                    el.startTrainingBtn.disabled = false;
+                    el.startTrainingBtn.textContent = "Start Training \u2192";
+
+                    el.finalBestDice.textContent = data.best_val_dice ? data.best_val_dice.toFixed(4) : "N/A";
+                    el.trainingCompleteAction.classList.remove('hidden');
+                    el.trainEtaDisplay.textContent = "Finished";
+                    showToast("Model Training Completed!", "success");
+                }
+                else if (data.status === 'failed') {
+                    clearInterval(trainPollingInterval);
+                    el.startTrainingBtn.disabled = false;
+                    el.startTrainingBtn.textContent = "Start Training \u2192";
+                    el.trainEtaDisplay.textContent = "Failed";
+                    showToast("Training encountered an error.", "error");
+                }
+            }
+        } catch (e) {
+            console.error("Error polling train status:", e);
+        }
+    }, 2000);
 }
 
 
