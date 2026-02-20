@@ -52,6 +52,7 @@
             <li><a href="#upload" class="nav-link">Upload</a></li>
             <li><a href="#viewer" class="nav-link">Viewer</a></li>
             <li><a href="#pipeline" class="nav-link">Pipeline</a></li>
+            <li><a href="#training" class="nav-link">Training</a></li>
             <li><a href="#about" class="nav-link">About</a></li>
         </ul>
     </nav>
@@ -308,7 +309,103 @@
             </div>
         </section>
 
-        <!-- =================== PAGE 5: ABOUT =================== -->
+        <!-- =================== PAGE 5: MODEL TRAINING =================== -->
+        <section id="page-training" class="page-section hidden">
+            <div class="training-container">
+                <h2 class="page-title">Model Training</h2>
+                <p class="page-subtitle">Configure hyperparameters and train the U-Net model on the processed dataset.
+                </p>
+
+                <div class="training-grid">
+                    <!-- Left Column: Configuration -->
+                    <div class="training-col config-panel">
+                        <div class="panel-header">Training Configuration</div>
+                        <div class="card bg-surface mt-1">
+                            <div class="input-group">
+                                <label for="trainEpochs">Epochs</label>
+                                <input type="number" id="trainEpochs" value="50" min="1" max="500">
+                            </div>
+                            <div class="input-group">
+                                <label for="trainBatch">Batch Size</label>
+                                <input type="number" id="trainBatch" value="8" min="1" max="64">
+                            </div>
+                            <div class="input-group">
+                                <label for="trainLR">Learning Rate</label>
+                                <input type="number" id="trainLR" value="0.0001" step="0.00001">
+                            </div>
+                            <div class="input-group">
+                                <label for="trainLoss">Loss Function</label>
+                                <select id="trainLoss">
+                                    <option value="dice_bce">Dice + BCE (Default)</option>
+                                    <option value="focal">Focal Loss</option>
+                                </select>
+                            </div>
+                            <div class="input-group toggle-group mt-1">
+                                <label class="toggle-label" for="trainRemoveEmpty">
+                                    <span>Remove Empty Slices</span>
+                                    <input type="checkbox" id="trainRemoveEmpty" class="toggle-switch" checked>
+                                    <span class="slider round"></span>
+                                </label>
+                            </div>
+                            <div class="gpu-status mt-2">
+                                <span class="label">Hardware:</span>
+                                <span id="gpuStatusBadge" class="badge-status checking">Checking GPU...</span>
+                            </div>
+                            <button id="startTrainingBtn" class="btn-primary run-btn mt-2">Start Training
+                                &rarr;</button>
+                        </div>
+                    </div>
+
+                    <!-- Right Column: Progress & Metrics -->
+                    <div class="training-col progress-panel">
+                        <div class="panel-header">Live Progress</div>
+                        <div class="card bg-surface mt-1 progress-card">
+                            <div id="trainingNotStarted" class="empty-state">
+                                <p class="text-muted">Configure parameters and click "Start Training" to begin.</p>
+                            </div>
+
+                            <div id="trainingActive" class="training-active hidden">
+                                <div class="progress-header">
+                                    <h3 id="trainEpochDisplay">Epoch 0 / 50</h3>
+                                    <span id="trainEtaDisplay" class="eta-text">ETA: Calculating...</span>
+                                </div>
+                                <div class="conf-bar-bg mt-1 mb-2">
+                                    <div id="trainProgressBar" class="conf-bar-fill"
+                                        style="width: 0%; background-color: var(--accent-cyan);"></div>
+                                </div>
+
+                                <div class="metrics-grid">
+                                    <div class="metric-box">
+                                        <span class="label">Training Loss</span>
+                                        <span id="metricTrainLoss" class="value highlight">--</span>
+                                    </div>
+                                    <div class="metric-box">
+                                        <span class="label">Validation Dice</span>
+                                        <span id="metricValDice" class="value highlight">--</span>
+                                    </div>
+                                    <div class="metric-box">
+                                        <span class="label">Validation IoU</span>
+                                        <span id="metricValIou" class="value highlight">--</span>
+                                    </div>
+                                </div>
+
+                                <div id="trainingCompleteAction" class="mt-2 text-center hidden">
+                                    <div class="success-message mb-1">
+                                        <span class="icon">✅</span> Training Complete!
+                                    </div>
+                                    <p class="text-muted mb-2">Best Validation Dice: <span id="finalBestDice"
+                                            class="highlight"></span></p>
+                                    <button class="btn-secondary" onclick="window.location.hash='#upload'">Run
+                                        Inference</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- =================== PAGE 6: ABOUT =================== -->
         <section id="page-about" class="page-section hidden">
             <div class="about-container">
                 <h2 class="page-title">About the Project</h2>

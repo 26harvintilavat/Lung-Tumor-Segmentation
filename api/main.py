@@ -16,6 +16,10 @@ import scipy.ndimage
 from configs.config import RAW_DATA_DIR, MASK_DIR
 from src.preprocessing import convert_to_hu
 
+# Import dynamic training components
+from train import train as run_training_loop
+import torch
+
 app = FastAPI(title="LungSeg AI API")
 
 # Setup CORS for the frontend
@@ -29,6 +33,15 @@ app.add_middleware(
 
 # Global in-memory job store
 jobs = {}
+training_status = {
+    "status": "idle", # "idle", "running", "completed", "failed"
+    "current_epoch": 0,
+    "train_loss": 0.0,
+    "val_dice": 0.0,
+    "val_iou": 0.0,
+    "best_val_dice": 0.0,
+    "error": None
+}
 
 # Make sure basic processing directories exist
 RAW_DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -354,3 +367,74 @@ def get_status(job_id: str):
         raise HTTPException(status_code=404, detail="Job ID not found")
         
     return jobs[job_id]
+
+
+# ==========================================
+# MODEL TRAINING ENDPOINTS
+# ==========================================
+
+from pydantic import BaseModel
+
+class TrainConfig(BaseModel):
+    epochs: int = 50
+    batch_size: int = 8
+    learning_rate: float = 0.0001
+    loss_function: str = "dice_bce"
+    remove_empty_slices: bool = True
+
+@app.get("/gpu_status")
+def get_gpu_status():
+    if torch.cuda.is_available():
+        return {"available": True, "message": f"GPU Available: {torch.cuda.get_device_name(0)}"}
+    elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return {"available": True, "message": "GPU Available: Apple Silicon (MPS)"}
+    else:
+        return {"available": False, "message": "Running on CPU"}
+
+def training_background_task(config: TrainConfig):
+    import traceback
+    
+    # Reset global training state
+    training_status.update({
+        "status": "idle",
+        "current_epoch": 0,
+        "train_loss": 0.0,
+        "val_dice": 0.0,
+        "val_iou": 0.0,
+        "best_val_dice": 0.0,
+        "error": None
+    })
+
+    def status_callback(updates: dict):
+        training_status.update(updates)
+
+    try:
+        run_training_loop(
+            epochs=config.epochs,
+            batch_size=config.batch_size,
+            lr=config.learning_rate,
+            loss_function=config.loss_function,
+            remove_empty_slices=config.remove_empty_slices,
+            update_status_callback=status_callback
+        )
+    except Exception as e:
+        print(f"Training Failed: {e}")
+        traceback.print_exc()
+        training_status["status"] = "failed"
+        training_status["error"] = str(e)
+
+@app.post("/train")
+def trigger_training(config: TrainConfig, background_tasks: BackgroundTasks):
+    if training_status["status"] == "running":
+        raise HTTPException(status_code=400, detail="A training session is already running.")
+        
+    # Mark as starting so fast pollers don't see 'idle' immediately
+    training_status["status"] = "starting" 
+    
+    background_tasks.add_task(training_background_task, config)
+    
+    return {"message": "Model training initiated"}
+
+@app.get("/train_status")
+def get_train_status():
+    return training_status
