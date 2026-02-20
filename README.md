@@ -1,10 +1,9 @@
 # 🫁 Lung Tumor Segmentation (End-to-End)
 
-## 🚧 Project Status: Under Construction
+## 🚀 Project Status: E2E Pipeline Integrated
 
-> **This project is currently in active development.**
-> The repository is being built step by step as part of an end-to-end medical image segmentation pipeline.
-> New modules (preprocessing, modeling, training, and evaluation) will be added incrementally.
+> **This project has successfully integrated its full end-to-end medical image segmentation pipeline.**
+> It now features a powerful FastAPI backend for DICOM ingestion and inference alongside a decoupled Vanilla JS Single Page Application (SPA) frontend for rendering medical CT slices and tracking pipeline progress.
 
 ---
 
@@ -62,6 +61,8 @@ This design ensures correctness, reproducibility, and scalability across multipl
 ✅ Automatic CT series resolution  
 ✅ Tumor mask generation (3D)  
 ✅ CT + mask visualization and validation  
+✅ Vanilla JS SPA Frontend Medical Dashboard  
+✅ FastAPI Processing Backend (Async Pipelines)  
 
 🚧 Dataset class for training  
 🚧 Model architecture (U-Net / variants)  
@@ -132,29 +133,37 @@ This project uses the **LIDC-IDRI (Lung Image Database Consortium Image Collecti
 
 ---
 
-## ▶️ How to Run (Current Stage)
+## ▶️ How to Run
 
-1. Install dependencies:
-
+1. **Install Dependencies:**
+   Ensure you have Python 3.8+ installed.
    ```bash
-   pip install -r requirements.txt
+   pip3 install -r requirements.txt
    ```
 
-2. Download LIDC-IDRI CT data:
+2. **Start the FastAPI Backend:**
+   From the root directory, launch the API server on port 8000.
+   ```bash
+   uvicorn api.main:app --reload --port 8000
+   ```
 
+3. **Start the Frontend UI:**
+   Open a new terminal window, navigate to the `frontend` directory, and start a local HTTP server on port 3000.
+   ```bash
+   cd frontend
+   python3 -m http.server 3000
    ```
-   python scripts/lidc_downloader.py --num-series 2
-   ```
+
+4. **Access the Application:**
+   Open your browser and navigate to `http://localhost:3000`. You can upload DICOM files, view them in the dashboard, and trigger the analysis pipeline.
 
 ---
 
 ## 🛠 Technologies Used
 
-* Python
-* Pandas
-* TCIA Utils (`tcia-utils`)
-* Medical Imaging (DICOM)
-* Deep Learning (planned: PyTorch)
+* **Backend**: Python 3, FastAPI, Uvicorn, Pydicom, NumPy, SciPy, Pillow, TCIA Utils
+* **Frontend**: Vanilla HTML/CSS/JavaScript, Cornerstone.js (DICOM Rendering), HTML5 Canvas
+* **Machine Learning**: PyTorch (planned core integration)
 
 ---
 

@@ -8,4 +8,15 @@ matplotlib
 nibabel
 torch
 tqdm
+torchvisionfastapi
+uvicorn
+python-multipart
+pydicom
+numpy
+Pillow
+python-jose
+scipy
+torch
 torchvision
+matplotlib
+tqdm

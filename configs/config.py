@@ -7,7 +7,12 @@ ANNOTATION_DIR = DATA_DIR/'annotations'
 MASK_DIR = DATA_DIR/'masks'
 
 BATCH_SIZE = 8
-EPOCHS = 3
+EPOCHS = 50
 LR = 1e-4
 VAL_SPLIT = 0.2
 SEED = 42
+
+# Training settings
+REMOVE_EMPTY_SLICES = True
+BCE_WEIGHT = 0.5
+DICE_WEIGHT = 0.5
