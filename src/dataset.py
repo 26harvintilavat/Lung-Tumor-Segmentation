@@ -1,18 +1,42 @@
 from pathlib import Path
 import numpy as np
 import pydicom
-from src.preprocessing import convert_to_hu, window_image
+import torch
+from torch.utils.data import Dataset
 
-class LungCTDataset:
-    def __init__(self, series_dir: Path):
+from src.preprocessing import (
+    convert_to_hu,
+    resample_volume,
+    window_image,
+    zscore_normalize,
+    get_lung_bbox,
+    resize_image,
+    resize_mask
+)
+
+class LungCTDataset(Dataset):
+    def __init__(self, series_dir: Path, mask_volume: np.ndarray, img_size=256):
         self.series_dir = series_dir
+        self.img_size = img_size
         self.slices = self._load_slices()
 
-        self.pixel_scaling = self._get_pixel_spacing()
-        self.slice_thickness = self._get_slice_thickness()
-        self.voxel_spacing = self._get_voxel_spacing()
+        self.pixel_spacing = tuple(map(float, self.slices[0].PixelSpacing))
+        self.slice_thickness = float(self.slices[0].SliceThickness)
+        
+        self.spacing = np.array([
+            self.slice_thickness,
+            self.pixel_spacing[0],
+            self.pixel_spacing[1]
+        ])
 
-        self.volume = self._build_volume()
+        volume = convert_to_hu(self.slices)
+
+        self.volume = resample_volume(volume, self.spacing)
+
+        self.mask_volume = resample_volume(mask_volume, self.spacing)
+
+        assert self.volume.shape == self.mask_volume.shape, \
+            "Image and mask shape mismatch after resampling"
 
     def _load_slices(self):
         dicom_files = list(self.series_dir.rglob("*.dcm"))
@@ -23,25 +47,38 @@ class LungCTDataset:
         slices = [pydicom.dcmread(f) for f in dicom_files]
         slices.sort(key=lambda s: float(s.ImagePositionPatient[2]))
         return slices
-    
-    def _get_pixel_spacing(self):
-        return tuple(map(float, self.slices[0].PixelSpacing))
-    
-    def _get_slice_thickness(self):
-        return float(self.slices[0].SliceThickness)
-    
-    def _get_voxel_spacing(self):
-        row, col = self.pixel_scaling
-        z = self.slice_thickness
-        return (z, row, col)
-    
-    def _build_volume(self):
-        return convert_to_hu(self.slices)
-    
-    def get_slice(self, idx):
-        img = self.volume[idx]
-        img = window_image(img)
-        return img
-    
+
     def __len__(self):
         return self.volume.shape[0]
+    
+    def __getitem__(self, idx):
+
+        img = self.volume[idx]
+        mask = self.mask_volume[idx]
+
+        # Window
+        img = window_image(img)
+
+        # Normalize 
+        img = zscore_normalize(img)
+
+        # Lung Crop
+        bbox = get_lung_bbox(img)
+
+        if bbox is not None:
+            y_min, y_max, x_min, x_max = bbox
+            img = img[y_min:y_max, x_min:x_max]
+            mask = mask[y_min:y_max, x_min:x_max]
+
+        # Resize
+        img = resize_image(img, self.img_size)
+        mask = resize_mask(mask, self.img_size)
+
+        # Binary mask
+        mask = (mask > 0).astype(np.float32)
+
+        # To Tensor
+        img = torch.tensor(img).unsqueeze(0).float()
+        mask = torch.tensor(mask).unsqueeze(0).float()
+
+        return img, mask
