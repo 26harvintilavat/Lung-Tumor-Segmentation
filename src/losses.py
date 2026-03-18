@@ -2,35 +2,55 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-class DiceLoss(nn.Module):
-    def __init__(self, smooth=1e-6):
+
+class SoftDiceLoss(nn.Module):
+    def __init__(self, smooth=1e-5):
         super().__init__()
         self.smooth = smooth
 
     def forward(self, logits, targets):
 
-        # convert logits to probabilities
         probs = torch.sigmoid(logits)
 
-        # Flatten 
-        probs = probs.view(-1)
-        targets = targets.view(-1)
+        # compute dice per batch element
+        dims = (1, 2, 3)
 
-        intersection = (probs * targets).sum()
-        dice = (2.0 * intersection + self.smooth) / (
-            probs.sum() + targets.sum() + self.smooth
-        )
+        intersection = (probs * targets).sum(dims)
+        union = probs.sum(dims) + targets.sum(dims)
 
-        return 1 - dice
-    
-def dice_score(logits, targets, thresold=0.5):
+        dice = (2 * intersection + self.smooth) / (union + self.smooth)
+
+        loss = 1 - dice
+        return loss.mean()
+
+
+class BCEDiceLoss(nn.Module):
+    def __init__(self, bce_weight=0.5):
+        super().__init__()
+        self.bce = nn.BCEWithLogitsLoss()
+        self.dice = SoftDiceLoss()
+        self.bce_weight = bce_weight
+
+    def forward(self, logits, targets):
+
+        bce_loss = self.bce(logits, targets)
+        dice_loss = self.dice(logits, targets)
+
+        loss = self.bce_weight * bce_loss + (1 - self.bce_weight) * dice_loss
+
+        return loss
+
+
+def dice_score(logits, targets, threshold=0.5):
+
     probs = torch.sigmoid(logits)
-    preds = (probs > thresold).float()
+    preds = (probs > threshold).float()
 
-    preds = preds.view(-1)
-    targets = targets.view(-1)
+    dims = (1, 2, 3)
 
-    intersection = (preds * targets).sum()
-    dice = (2.0 * intersection)/(preds.sum() + targets.sum() + 1e-6)
+    intersection = (preds * targets).sum(dims)
+    union = preds.sum(dims) + targets.sum(dims)
 
-    return dice.item()
+    dice = (2 * intersection + 1e-5) / (union + 1e-5)
+
+    return dice.mean().item()
