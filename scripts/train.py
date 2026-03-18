@@ -14,13 +14,13 @@ from configs.config import RAW_DATA_DIR, MASK_DIR, BATCH_SIZE, LR, EPOCHS, VAL_S
 from src.train_dataset import LungSegmentationDataset
 from src.model import UNet
 from scripts.prepare_dataloaders import get_patient_ids, split_patients
-from src.losses import DiceLoss
+from src.losses import BCEDiceLoss, dice_score
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
 
 # Train one epoch
-def train_one_epoch(model, loader, optimizer, bce_loss, dice_loss, device, scaler):
+def train_one_epoch(model, loader, optimizer, criterion, device, scaler):
     model.train()
     total_loss = 0
 
@@ -39,7 +39,7 @@ def train_one_epoch(model, loader, optimizer, bce_loss, dice_loss, device, scale
 
         with autocast(device_type="cuda"):
             outputs = model(images)
-            loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
+            loss = criterion(outputs, masks)
 
         optimizer.zero_grad()
         scaler.scale(loss).backward()
@@ -52,9 +52,10 @@ def train_one_epoch(model, loader, optimizer, bce_loss, dice_loss, device, scale
     return total_loss/len(loader)
 
 # Validation
-def validate(model, loader, bce_loss, dice_loss, device):
+def validate(model, loader, criterion, device):
     model.eval()
     total_loss = 0
+    total_dice = 0
 
     progress_bar = tqdm(loader, desc="Validation", leave=False)
 
@@ -65,12 +66,15 @@ def validate(model, loader, bce_loss, dice_loss, device):
 
             with autocast(device_type = "cuda"):
                 outputs = model(images)
-                loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
+                loss = criterion(outputs, masks)
+
+            batch_dice = dice_score(outputs, masks)
+            total_dice += batch_dice
 
             total_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item())
     
-    return total_loss/len(loader)
+    return total_loss/len(loader), total_dice/len(loader)
 
 # Main training function
 def main():
@@ -129,8 +133,7 @@ def main():
         torch.backends.cudnn.benchmark = True
 
     # Loss & optimizer
-    bce_loss = nn.BCEWithLogitsLoss()
-    dice_loss = DiceLoss()
+    criterion = BCEDiceLoss(bce_weight=0.5)
     optimizer = Adam(model.parameters(), lr=LR)
 
     save_dir = Path("checkpoints")
@@ -171,14 +174,14 @@ def main():
     for epoch in range(start_epoch, EPOCHS):
         print(f"\nEpoch [{epoch+1}/{EPOCHS}]")
 
-        train_loss = train_one_epoch(model, train_loader, optimizer, bce_loss, dice_loss, device, scaler)
+        train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler)
 
-        val_loss = validate(model, val_loader, bce_loss, dice_loss, device)
+        val_loss, val_dice = validate(model, val_loader, criterion, device)
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
 
-        print(f"Train loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+        print(f"Train loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Dice: {val_dice:.4f}")
 
         if device.type == "cuda":
             torch.cuda.empty_cache()
