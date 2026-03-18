@@ -8,6 +8,7 @@ import torch
 import torch.nn as nn
 from torch.optim import Adam
 from torch.utils.data import DataLoader
+from torch.amp import autocast, GradScaler
 
 from configs.config import RAW_DATA_DIR, MASK_DIR, BATCH_SIZE, LR, EPOCHS, VAL_SPLIT, SEED
 from src.train_dataset import LungSegmentationDataset
@@ -16,24 +17,34 @@ from scripts.prepare_dataloaders import get_patient_ids, split_patients
 from src.losses import DiceLoss
 from tqdm import tqdm
 import matplotlib.pyplot as plt
+import os
 
 # Train one epoch
-def train_one_epoch(model, loader, optimizer, bce_loss, dice_loss, device):
+def train_one_epoch(model, loader, optimizer, bce_loss, dice_loss, device, scaler):
     model.train()
     total_loss = 0
 
     progress_bar = tqdm(loader, desc="Training", leave=False)
 
     for images, masks in progress_bar:
-        images = images.to(device, non_blocking=True)
+        images = images.to(device, memory_format= torch.channels_last, non_blocking=True)
         masks = masks.to(device, non_blocking=True)
 
-        outputs = model(images)
-        loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
+        # outputs = model(images)
+        # loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
+
+        # optimizer.zero_grad()
+        # loss.backward()
+        # optimizer.step()
+
+        with autocast(device_type="cuda"):
+            outputs = model(images)
+            loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
 
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         total_loss += loss.item()
         progress_bar.set_postfix(loss=loss.item())
@@ -49,11 +60,12 @@ def validate(model, loader, bce_loss, dice_loss, device):
 
     with torch.no_grad():
         for images, masks in progress_bar:
-            images = images.to(device)
+            images = images.to(device, memory_format= torch.channels_last, non_blocking=True)
             masks = masks.to(device)
 
-            outputs = model(images)
-            loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
+            with autocast(device_type = "cuda"):
+                outputs = model(images)
+                loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
 
             total_loss += loss.item()
             progress_bar.set_postfix(loss=loss.item())
@@ -67,6 +79,8 @@ def main():
 
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
+
+    scaler = GradScaler()
 
     # Patients
     patient_ids = get_patient_ids(MASK_DIR)
@@ -92,16 +106,16 @@ def main():
         train_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=True,
-        num_workers=2,
+        num_workers= min(4, os.cpu_count()),
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=True 
         )
     
     val_loader = DataLoader(
         val_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=False,
-        num_workers=2,
+        num_workers= min(4, os.cpu_count()),
         pin_memory=True,
         persistent_workers=True
         )
@@ -110,7 +124,9 @@ def main():
     print("Val batches:", len(val_loader))
 
     # Model
-    model = UNet(in_channels=1, out_channels=1).to(device)
+    model = UNet(in_channels=1, out_channels=1).to(device, memory_format=torch.channels_last)
+    if device.type == "cuda":
+        torch.backends.cudnn.benchmark = True
 
     # Loss & optimizer
     bce_loss = nn.BCEWithLogitsLoss()
@@ -155,7 +171,7 @@ def main():
     for epoch in range(start_epoch, EPOCHS):
         print(f"\nEpoch [{epoch+1}/{EPOCHS}]")
 
-        train_loss = train_one_epoch(model, train_loader, optimizer, bce_loss, dice_loss, device)
+        train_loss = train_one_epoch(model, train_loader, optimizer, bce_loss, dice_loss, device, scaler)
 
         val_loss = validate(model, val_loader, bce_loss, dice_loss, device)
 
@@ -163,6 +179,9 @@ def main():
         val_losses.append(val_loss)
 
         print(f"Train loss: {train_loss:.4f} | Val Loss: {val_loss:.4f}")
+
+        if device.type == "cuda":
+            torch.cuda.empty_cache()
 
         # save best model
         if val_loss < best_val_loss:
