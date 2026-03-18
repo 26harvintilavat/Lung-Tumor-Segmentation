@@ -57,6 +57,8 @@ def main():
         val_ids
     )
 
+    val_dataset.augment = False
+
     train_loader = DataLoader(
         train_dataset,
         batch_size=BATCH_SIZE,
