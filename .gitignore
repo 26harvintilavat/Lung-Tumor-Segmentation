@@ -1,10 +1,6 @@
 # Ignore everything inside data
 data/*
 
-# But keep Python source files
-!data/*.py
-!data/**/*.py
-
 data/raw/
 data/processed/
 lung_data/
