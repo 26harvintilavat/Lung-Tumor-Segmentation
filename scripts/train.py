@@ -128,13 +128,20 @@ def main():
     print("Val batches:", len(val_loader))
 
     # Model
-    model = UNet(in_channels=1, out_channels=1).to(device, memory_format=torch.channels_last)
+    model = UNet(in_channels=3, out_channels=1).to(device, memory_format=torch.channels_last)
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
 
     # Loss & optimizer
     criterion = BCEDiceLoss(bce_weight=0.5)
     optimizer = Adam(model.parameters(), lr=LR)
+    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+        optimizer,
+        mode="min",
+        factor=0.5,
+        patience=4,
+        verbose=True
+    )
 
     save_dir = Path("checkpoints")
     save_dir.mkdir(exist_ok=True)
@@ -177,6 +184,11 @@ def main():
         train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler)
 
         val_loss, val_dice = validate(model, val_loader, criterion, device)
+
+        scheduler.step(val_loss)
+
+        current_lr = optimizer.param_groups[0]['lr']
+        print(f"Current LR: {current_lr:6f}")
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
