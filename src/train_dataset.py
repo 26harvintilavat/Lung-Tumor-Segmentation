@@ -15,7 +15,7 @@ class LungSegmentationDataset(Dataset):
     Uses fully preprocessed volumes from LungCTDataset.
     """
 
-    def __init__(self, raw_dir, mask_dir, patient_ids, img_size=256):
+    def __init__(self, raw_dir, mask_dir, patient_ids, img_size=384):
 
         self.samples = []
         self.patient_volumes = {}
@@ -85,16 +85,23 @@ class LungSegmentationDataset(Dataset):
         pid, z = self.samples[idx]
 
         #  Load numpy slices
-        image = self.patient_volumes[pid][z]
-        mask = self.patient_masks[pid][z]
+        volume = self.patient_volumes[pid]
+        mask_volume = self.patient_masks[pid]
+
+        prev_slice = volume[z-1] if z>0 else volume[z]
+        curr_slice = volume[z]
+        next_slice = volume[z+1] if z < len(volume)-1 else volume[z]
+
+        image = np.stack([prev_slice, curr_slice, next_slice], axis=0)
+        mask = mask_volume[z]
 
         image = image.astype(np.float32)
         mask = mask.astype(np.float32)
 
         # Lung crop FIRST (on numpy)
-        ymin, ymax, xmin, xmax = get_lung_bbox(image)
+        ymin, ymax, xmin, xmax = get_lung_bbox(curr_slice)
 
-        image = image[ymin:ymax, xmin:xmax]
+        image = image[:, ymin:ymax, xmin:xmax]
         mask = mask[ymin:ymax, xmin:xmax]
 
         if self.augment:
@@ -111,7 +118,7 @@ class LungSegmentationDataset(Dataset):
                 mask = TF.rotate(torch.from_numpy(mask).unsqueeze(0), angle, interpolation=InterpolationMode.NEAREST).squeeze(0).numpy()
 
         #  Then tensor conversion
-        image = torch.from_numpy(image).unsqueeze(0)
+        image = torch.from_numpy(image)
         mask = torch.from_numpy(mask).unsqueeze(0)
 
         #  Then resize
