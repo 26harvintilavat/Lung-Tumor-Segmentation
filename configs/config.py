@@ -6,9 +6,9 @@ RAW_DATA_DIR = DATA_DIR/'raw'
 ANNOTATION_DIR = DATA_DIR/'annotations'
 MASK_DIR = DATA_DIR/'masks'
 
-BATCH_SIZE = 8
+BATCH_SIZE = 2
 EPOCHS = 50
-LR = 1e-4
+LR = 3e-4
 VAL_SPLIT = 0.2
 SEED = 42
 
