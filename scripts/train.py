@@ -110,18 +110,18 @@ def main():
         train_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=True,
-        num_workers= min(4, os.cpu_count()),
+        num_workers= 0,
         pin_memory=True,
-        persistent_workers=True 
+        persistent_workers=False 
         )
     
     val_loader = DataLoader(
         val_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=False,
-        num_workers= min(4, os.cpu_count()),
+        num_workers=0,
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=False
         )
 
     print("Train batches:", len(train_loader))

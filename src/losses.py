@@ -4,7 +4,7 @@ import torch.nn.functional as F
 
 
 class SoftDiceLoss(nn.Module):
-    def __init__(self, smooth=1e-5):
+    def __init__(self, smooth=1e-4):
         super().__init__()
         self.smooth = smooth
 
@@ -27,7 +27,7 @@ class SoftDiceLoss(nn.Module):
 class BCEDiceLoss(nn.Module):
     def __init__(self, bce_weight=0.5):
         super().__init__()
-        self.bce = nn.BCEWithLogitsLoss()
+        self.bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3.0]))
         self.dice = SoftDiceLoss()
         self.bce_weight = bce_weight
 
@@ -52,5 +52,6 @@ def dice_score(logits, targets, threshold=0.5):
     union = preds.sum(dims) + targets.sum(dims)
 
     dice = (2 * intersection + 1e-5) / (union + 1e-5)
+    dice[union == 0] = 1
 
     return dice.mean().item()
