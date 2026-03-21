@@ -14,7 +14,8 @@ from configs.config import RAW_DATA_DIR, MASK_DIR, BATCH_SIZE, LR, EPOCHS, VAL_S
 from src.train_dataset import LungSegmentationDataset
 from src.model import LungAttentionUNet
 from scripts.prepare_dataloaders import get_patient_ids, split_patients
-from src.losses import BCEDiceLoss, dice_score
+from src.losses import TverskyFocalLoss, dice_score
+from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 from tqdm import tqdm
 import matplotlib.pyplot as plt
 import os
@@ -23,11 +24,16 @@ import os
 def train_one_epoch(model, loader, optimizer, criterion, device, scaler):
     model.train()
     total_loss = 0
+    total_dice = 0
 
     progress_bar = tqdm(loader, desc="Training", leave=False)
 
     for images, masks in progress_bar:
+
+        optimizer.zero_grad(set_to_none=True)
+
         images = images.to(device, memory_format= torch.channels_last, non_blocking=True)
+
         masks = masks.to(device, non_blocking=True)
 
         # outputs = model(images)
@@ -41,40 +47,59 @@ def train_one_epoch(model, loader, optimizer, criterion, device, scaler):
             outputs = model(images)
             loss = criterion(outputs, masks)
 
-        optimizer.zero_grad()
         scaler.scale(loss).backward()
+        
+        # gradient clipping 
+        scaler.unscale_(optimizer)
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+
         scaler.step(optimizer)
         scaler.update()
 
+        batch_dice = dice_score(outputs, masks)
         total_loss += loss.item()
-        progress_bar.set_postfix(loss=loss.item())
+        total_dice += batch_dice
 
-    return total_loss/len(loader)
+        progress_bar.set_postfix(
+            loss=f"{loss.item():.4f}",
+            dice=f"{batch_dice:.4f}"
+        )
+
+    n = len(loader)
+    return total_loss/n, total_dice/n
 
 # Validation
 def validate(model, loader, criterion, device):
     model.eval()
     total_loss = 0
     total_dice = 0
+    total_samples = 0 # weighted average by batch size
 
     progress_bar = tqdm(loader, desc="Validation", leave=False)
 
     with torch.no_grad():
         for images, masks in progress_bar:
             images = images.to(device, memory_format= torch.channels_last, non_blocking=True)
-            masks = masks.to(device)
+
+            masks = masks.to(device, non_blocking=True)
 
             with autocast(device_type = "cuda"):
                 outputs = model(images)
                 loss = criterion(outputs, masks)
 
+            batch_size = images.size(0)
             batch_dice = dice_score(outputs, masks)
-            total_dice += batch_dice
 
-            total_loss += loss.item()
-            progress_bar.set_postfix(loss=loss.item())
-    
-    return total_loss/len(loader), total_dice/len(loader)
+            total_loss += loss.item() * batch_size
+            total_dice += batch_dice * batch_size
+            total_samples += batch_size
+
+            progress_bar.set_postfix(
+                loss=f"{loss.item():.4f}",
+                dice=f"{batch_dice:.4f}"
+            )
+
+    return total_loss/total_samples, total_dice/total_samples
 
 # Main training function
 def main():
@@ -105,23 +130,24 @@ def main():
     print("Train samples:", len(train_dataset))
     print("Val samples:", len(val_dataset))
 
+    num_workers = min(4, os.cpu_count())
     # DataLoaders
     train_loader = DataLoader(
         train_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=True,
-        num_workers= 0,
+        num_workers= num_workers,
         pin_memory=True,
-        persistent_workers=False 
+        persistent_workers=True
         )
     
     val_loader = DataLoader(
         val_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=False,
-        num_workers=0,
+        num_workers=num_workers,
         pin_memory=True,
-        persistent_workers=False
+        persistent_workers=True
         )
 
     print("Train batches:", len(train_loader))
@@ -129,18 +155,32 @@ def main():
 
     # Model
     model = LungAttentionUNet(in_channels=3, out_channels=1).to(device, memory_format=torch.channels_last)
-    if device.type == "cuda":
-        torch.backends.cudnn.benchmark = True
 
     # Loss & optimizer
-    criterion = BCEDiceLoss(bce_weight=0.5)
+    criterion = TverskyFocalLoss(
+        tversky_alpha=0.3,
+        tversky_beta=0.7,
+        focal_gamma=2.0,
+        tversky_weight=0.7
+    )
     optimizer = Adam(model.parameters(), lr=LR)
-    scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+    warmup = LinearLR(
         optimizer,
-        mode="min",
-        factor=0.5,
-        patience=4,
-        verbose=True
+        start_factor=0.1,
+        end_factor=1.0,
+        total_iters=5
+    )
+
+    cosine = CosineAnnealingLR(
+        optimizer,
+        T_max=45,
+        eta_min=1e-6
+    )
+
+    scheduler = SequentialLR(
+        optimizer,
+        schedulers=[warmup, cosine],
+        milestones=[5]
     )
 
     save_dir = Path("checkpoints")
@@ -148,11 +188,12 @@ def main():
 
     checkpoint_path = save_dir/"best_model.pth"
     start_epoch = 0
+    best_val_dice = 0.0
+    early_stop_counter = 0
+    PATIENCE = 15
 
-    best_val_loss = float("inf")
-
-    train_losses = []
-    val_losses = []
+    train_losses, val_losses = [], []
+    train_dices, val_dices = [], []
 
     print("\nStarting training...\n")
 
@@ -164,10 +205,13 @@ def main():
         if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
             model.load_state_dict(checkpoint['model_state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+
+            if 'scheduler_state_dict' in checkpoint:
+                scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+
             start_epoch = checkpoint['epoch'] + 1
-            best_val_loss = checkpoint.get("best_val_loss", float('inf'))
- 
-            print(f"Resuming from epoch {start_epoch}")
+            best_val_dice = checkpoint.get('best_val_dice', 0.0)
+            print(f"Resuming from epoch {start_epoch} | Best Val Dice so far: {best_val_dice:.4f}")
 
         else:
             model.load_state_dict(checkpoint)
@@ -179,47 +223,75 @@ def main():
 
     # Epoch loop
     for epoch in range(start_epoch, EPOCHS):
+        train_loader.dataset.resample_per_epoch()
         print(f"\nEpoch [{epoch+1}/{EPOCHS}]")
 
-        train_loss = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler)
+        train_loss, train_dice = train_one_epoch(model, train_loader, optimizer, criterion, device, scaler)
 
         val_loss, val_dice = validate(model, val_loader, criterion, device)
 
-        scheduler.step(val_loss)
+        scheduler.step()
 
         current_lr = optimizer.param_groups[0]['lr']
         print(f"Current LR: {current_lr:6f}")
+        print(f"Train Loss: {train_loss:.4f} | Train Dice: {train_dice:.4f}")
+        print(f"Val Loss: {val_loss:.4f} | Val Dice: {val_dice:.4f}")
 
         train_losses.append(train_loss)
         val_losses.append(val_loss)
-
-        print(f"Train loss: {train_loss:.4f} | Val Loss: {val_loss:.4f} | Val Dice: {val_dice:.4f}")
+        train_dices.append(train_dice)
+        val_dices.append(val_dice)
 
         if device.type == "cuda":
             torch.cuda.empty_cache()
 
         # save best model
-        if val_loss < best_val_loss:
-            best_val_loss = val_loss
+        if val_dice > best_val_dice:
+            best_val_dice = val_dice
+            early_stop_counter = 0
             torch.save({
                 'epoch': epoch,
                 'model_state_dict': model.state_dict(),
                 'optimizer_state_dict': optimizer.state_dict(),
-                'best_val_loss': best_val_loss
+                'scheduler_state_dict': scheduler.state_dict(),
+                'best_val_dice': best_val_dice,
+                'val_loss': val_loss,
             }, checkpoint_path)
-            print(f"Model saved at {checkpoint_path}")
+            print(f"Best model saved - Val Dice: {val_dice:.4f}")
 
-    plt.figure()
-    plt.plot(train_losses, label="Train Loss")
-    plt.plot(val_losses, label="val_loss")
-    plt.xlabel("Epoch")
-    plt.ylabel("Loss")
-    plt.legend()
-    plt.title("Training Curve")
+        else:
+            early_stop_counter += 1
+            print(f"No improvement. Patience: {early_stop_counter}/{PATIENCE}")
 
-    plot_path = save_dir/"training_curve.png"
-    plt.savefig(plot_path)
-    print(f"Training curve saved at {plot_path}")
+            if early_stop_counter >= PATIENCE:
+                print(f"\n Early stopping at epoch {epoch+1}.")
+                print(f"Best Val Dice: {best_val_dice:.4f}")
+                break
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 5))
+
+    ax1.plot(train_losses, label="Train Loss", color="blue")
+    ax1.plot(val_losses,   label="Val Loss",   color="orange")
+    ax1.set_xlabel("Epoch")
+    ax1.set_ylabel("Loss")
+    ax1.set_title("Loss Curve")
+    ax1.legend()
+    ax1.grid(True)
+
+    ax2.plot(train_dices, label="Train Dice", color="green")
+    ax2.plot(val_dices,   label="Val Dice",   color="red")
+    ax2.set_xlabel("Epoch")
+    ax2.set_ylabel("Dice Score")
+    ax2.set_title("Dice Score Curve")
+    ax2.legend()
+    ax2.grid(True)
+
+    plt.tight_layout()
+    plot_path = save_dir / "training_curve.png"
+    plt.savefig(plot_path, dpi=150)
+    plt.close()
+    print(f"\nTraining curve saved at {plot_path}")
+
 
 if __name__ == "__main__":
     main()

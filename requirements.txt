@@ -8,14 +8,10 @@ matplotlib
 nibabel
 torch
 tqdm
-torchvisionfastapi
 uvicorn
-python-multipart
+scipy
 pydicom
 numpy
-Pillow
-python-jose
-scipy
 torch
 torchvision
 matplotlib
