@@ -25,9 +25,11 @@ class SoftDiceLoss(nn.Module):
 
 
 class BCEDiceLoss(nn.Module):
-    def __init__(self, bce_weight=0.5):
+    def __init__(self, bce_weight=0.5, pos_weight=3.0):
         super().__init__()
-        self.bce = nn.BCEWithLogitsLoss(pos_weight=torch.tensor([3.0]))
+
+        self.register_buffer('pos_weight', torch.tensor(pos_weight))
+        self.bce = nn.BCEWithLogitsLoss(pos_weight=self.pos_weight)
         self.dice = SoftDiceLoss()
         self.bce_weight = bce_weight
 

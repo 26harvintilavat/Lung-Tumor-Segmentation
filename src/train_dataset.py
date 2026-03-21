@@ -77,6 +77,13 @@ class LungSegmentationDataset(Dataset):
 
         print("Total training samples:", len(self.samples))
 
+        tumor = 0
+        for pid, z in self.samples:
+            if self.patient_masks[pid][z].sum() > 0:
+                tumor += 1
+
+        print(f"Tumor slices: {tumor}, Background slices: {len(self.samples) - tumor}")
+
     def __len__(self):
         return len(self.samples)
 

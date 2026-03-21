@@ -15,7 +15,7 @@ from src.preprocessing import (
 )
 
 class LungCTDataset(Dataset):
-    def __init__(self, series_dir: Path, mask_volume: np.ndarray, img_size=256):
+    def __init__(self, series_dir: Path, mask_volume: None, img_size=256):
         self.series_dir = series_dir
         self.img_size = img_size
         self.slices = self._load_slices()
@@ -33,10 +33,19 @@ class LungCTDataset(Dataset):
 
         self.volume = resample_volume(volume, self.spacing)
 
-        self.mask_volume = resample_volume(mask_volume, self.spacing)
+        if mask_volume is not None:
+            self.mask_volume = resample_volume(mask_volume, self.spacing)
 
-        assert self.volume.shape == self.mask_volume.shape, \
-            "Image and mask shape mismatch after resampling"
+            z = min(self.volume.shape[0], self.mask_volume.shape[0])
+            y = min(self.volume.shape[1], self.mask_volume.shape[1])
+            x = min(self.volume.shape[2], self.mask_volume.shape[2])
+
+            self.volume = self.volume[:z, :y, :x]
+            self.mask_volume = self.mask_volume[:z, :y, :x]
+        else:
+            self.mask_volume = None
+
+        
 
     def _load_slices(self):
         dicom_files = list(self.series_dir.rglob("*.dcm"))

@@ -9,7 +9,7 @@ MASK_DIR = DATA_DIR/'masks'
 BATCH_SIZE = 2
 EPOCHS = 50
 LR = 3e-4
-VAL_SPLIT = 0.2
+VAL_SPLIT = 0.25
 SEED = 42
 
 # Training settings

@@ -12,7 +12,7 @@ from torch.amp import autocast, GradScaler
 
 from configs.config import RAW_DATA_DIR, MASK_DIR, BATCH_SIZE, LR, EPOCHS, VAL_SPLIT, SEED
 from src.train_dataset import LungSegmentationDataset
-from src.model import UNet
+from src.model import LungAttentionUNet
 from scripts.prepare_dataloaders import get_patient_ids, split_patients
 from src.losses import BCEDiceLoss, dice_score
 from tqdm import tqdm
@@ -128,7 +128,7 @@ def main():
     print("Val batches:", len(val_loader))
 
     # Model
-    model = UNet(in_channels=3, out_channels=1).to(device, memory_format=torch.channels_last)
+    model = LungAttentionUNet(in_channels=3, out_channels=1).to(device, memory_format=torch.channels_last)
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
 

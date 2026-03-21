@@ -35,7 +35,7 @@ def build_mask_from_json(json_path, series_dir):
         annotation = json.load(f)
 
     # Load CT
-    dataset = LungCTDataset(series_dir)
+    dataset = LungCTDataset(series_dir, None)
     volume_shape = dataset.volume.shape
     mask_volume = np.zeros(volume_shape, dtype=np.uint8)
 
