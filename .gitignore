@@ -1,25 +1,39 @@
-# Ignore everything inside data
-data/*
-
+# ── Data (never commit raw medical data) ──
 data/raw/
 data/processed/
-lung_data/
-
-# Ignore medical images
+data/cache/
+data/lung_data/
 data/**/*.dcm
 data/**/*.nii
 data/**/*.nii.gz
 
+# ── Model weights ──
 checkpoints/
 outputs/
 *.pth
 
-# Ignore environments and cache
-myvenv/
+# ── Python ──
 venv/
+myvenv/
+.venv/
 __pycache__/
 *.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
 
-data/cache
+# ── Frontend junk ── 
+frontend/*_beautiful.*
+frontend/test_viewer.html
+
+# ── OS / editor ──
+.DS_Store
+.idea/
+.vscode/
+*.swp
+
+# ── Test files ──
 test_patient.zip
+test_viewer.html
 

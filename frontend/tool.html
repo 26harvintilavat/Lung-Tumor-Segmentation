@@ -4,6 +4,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LungSeg AI — Segmentation Tool</title>
+  <meta name="description" content="Upload a DICOM ZIP and run Attention U-Net inference to detect and visualise lung tumor regions slice by slice." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23080a0d'/><text x='50%25' y='54%25' font-family='system-ui,sans-serif' font-weight='700' font-size='13' fill='%2300f2ff' text-anchor='middle' dominant-baseline='middle'>LS</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -110,8 +112,9 @@
         </div>
 
         <button id="runBtn" class="run-btn" disabled>
-          <span class="run-btn-text">Run Segmentation</span>
-          <span class="run-btn-arrow">→</span>
+          <span class="run-btn-spinner" id="runBtnSpinner" style="display:none"></span>
+          <span class="run-btn-text" id="runBtnText">Run Segmentation</span>
+          <span class="run-btn-arrow" id="runBtnArrow">→</span>
         </button>
 
         <div id="errorMessage" class="error-msg hidden"></div>
@@ -150,10 +153,30 @@
   ════════════════════════════════════════ -->
   <section id="resultsSection" class="results hidden">
 
+    <!-- summary header -->
     <div class="results-header">
       <div class="results-title-wrap">
         <h2 class="results-title">Segmentation Results</h2>
         <div class="results-line"></div>
+      </div>
+      <div class="results-meta">
+        <span class="results-filename" id="resultsFilename"></span>
+        <span class="results-time" id="resultsTime"></span>
+      </div>
+    </div>
+
+    <!-- severity banner -->
+    <div class="severity-banner" id="severityBanner">
+      <div class="severity-icon" id="severityIcon"></div>
+      <div class="severity-text">
+        <span class="severity-label" id="severityLabel"></span>
+        <span class="severity-desc" id="severityDesc"></span>
+      </div>
+      <div class="severity-bar-wrap">
+        <div class="severity-bar-track">
+          <div class="severity-bar-fill" id="severityBarFill"></div>
+        </div>
+        <span class="severity-pct" id="severityPct"></span>
       </div>
     </div>
 
@@ -163,39 +186,95 @@
         <div class="stat-glow"></div>
         <span class="stat-label">Total Slices</span>
         <span id="statTotalSlices" class="stat-value">—</span>
-        <span class="stat-unit">axial cuts</span>
+        <span class="stat-unit">axial CT cuts scanned</span>
       </div>
       <div class="stat-card accent">
         <div class="stat-glow"></div>
         <span class="stat-label">Tumor Slices</span>
         <span id="statTumorSlices" class="stat-value">—</span>
-        <span class="stat-unit">with detection</span>
+        <span class="stat-unit">slices with detections</span>
       </div>
       <div class="stat-card">
         <div class="stat-glow"></div>
         <span class="stat-label">Tumor Volume</span>
         <span id="statTumorVolume" class="stat-value">—</span>
-        <span class="stat-unit">voxels</span>
+        <span class="stat-unit">voxels · raw model output</span>
       </div>
     </div>
 
-    <!-- overlay strip -->
+    <!-- disclaimer -->
+    <div class="disclaimer-banner">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>For research &amp; educational purposes only — not intended for clinical diagnosis or medical decision-making.</span>
+    </div>
+
+    <!-- slice density bar -->
+    <div class="density-section">
+      <div class="density-header">
+        <span class="density-label">Axial Slice Map</span>
+        <div class="density-legend">
+          <span class="legend-item"><span class="legend-dot tumor"></span>Tumor detected</span>
+          <span class="legend-item"><span class="legend-dot clear"></span>Clear</span>
+        </div>
+      </div>
+      <div class="density-bar" id="densityBar"></div>
+      <div class="density-axis"><span>First slice</span><span>Last slice</span></div>
+    </div>
+
+    <!-- overlay grid -->
     <div class="detections-section">
       <div class="detections-header">
-        <span class="detections-label">Tumor Detections</span>
+        <div>
+          <span class="detections-label">Tumor Detections</span>
+          <div class="detections-legend">
+            <span class="det-legend-dot"></span>
+            <span class="detections-hint">Red = predicted tumor region &nbsp;·&nbsp; click any slice to enlarge</span>
+          </div>
+        </div>
         <span class="detections-count" id="detectionsCount"></span>
       </div>
-      <div id="overlayStrip" class="overlay-strip"></div>
+
+      <!-- empty state -->
+      <div class="detections-empty hidden" id="detectionsEmpty">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <p>No tumor regions detected in this scan.</p>
+        <span>The model found no slices exceeding the detection threshold.</span>
+      </div>
+
+      <div id="overlayStrip" class="overlay-grid"></div>
+    </div>
+
+    <!-- run another -->
+    <div class="run-another">
+      <button class="run-another-btn" onclick="window.scrollTo({top:0,behavior:'smooth'})">
+        ↑ Analyze Another Scan
+      </button>
     </div>
 
   </section>
 
+  <!-- toast container -->
+  <div id="toastContainer" class="toast-container"></div>
+
+  <!-- lightbox -->
+  <div class="lightbox hidden" id="lightbox" onclick="closeLightbox()">
+    <div class="lightbox-inner">
+      <img id="lightboxImg" src="" alt="" />
+      <div class="lightbox-info">
+        <span id="lightboxSlice"></span>
+        <span id="lightboxPixels"></span>
+        <span id="lightboxBadge"></span>
+      </div>
+      <p class="lightbox-hint">Click anywhere to close</p>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 
   <script>
+    /* ── step animator ── */
     let stepTimer = null;
     const steps = ['step1','step2','step3','step4'];
-
     function startSteps() {
       let i = 0;
       steps.forEach(id => document.getElementById(id).className = 'step');
@@ -207,28 +286,66 @@
       }, 900);
     }
     function stopSteps() { clearInterval(stepTimer); }
-
     const loaderEl = document.getElementById('loader');
-    const obs = new MutationObserver(() => {
-      if (!loaderEl.classList.contains('hidden')) startSteps();
-      else stopSteps();
-    });
-    obs.observe(loaderEl, { attributes: true, attributeFilter: ['class'] });
+    new MutationObserver(() => {
+      loaderEl.classList.contains('hidden') ? stopSteps() : startSteps();
+    }).observe(loaderEl, { attributes: true, attributeFilter: ['class'] });
 
+    /* ── count-up ── */
     function animateCount(el, target, isFloat) {
-      const dur = 900, step = 16;
-      const frames = dur / step;
+      const dur = 900, step = 16, frames = dur / step;
       let frame = 0;
       const timer = setInterval(() => {
         frame++;
         const val = target * (frame / frames);
         el.textContent = isFloat ? val.toFixed(1) : Math.round(val);
-        if (frame >= frames) { el.textContent = isFloat ? target.toFixed(2) : target; clearInterval(timer); }
+        if (frame >= frames) { el.textContent = isFloat ? parseFloat(target).toFixed(2) : target; clearInterval(timer); }
       }, step);
     }
 
+    /* ── severity banner ── */
+    function setSeverity(tumorSlices, totalSlices) {
+      const pct = totalSlices > 0 ? Math.round((tumorSlices / totalSlices) * 100) : 0;
+      const banner = document.getElementById('severityBanner');
+      const icon   = document.getElementById('severityIcon');
+      const label  = document.getElementById('severityLabel');
+      const desc   = document.getElementById('severityDesc');
+      const fill   = document.getElementById('severityBarFill');
+      const pctEl  = document.getElementById('severityPct');
+      let color, iconChar, labelText, descText;
+      if (tumorSlices === 0) {
+        color = 'var(--success)'; iconChar = '✓';
+        labelText = 'No Tumors Detected';
+        descText  = 'The model found no regions exceeding the detection threshold across all slices.';
+      } else if (pct < 15) {
+        color = '#00e87a'; iconChar = '⚠';
+        labelText = 'Low Involvement';
+        descText  = `Tumor regions found in ${pct}% of slices — localised detection.`;
+      } else if (pct < 40) {
+        color = '#ffb400'; iconChar = '⚠';
+        labelText = 'Moderate Involvement';
+        descText  = `Tumor regions found in ${pct}% of slices — moderate spread detected.`;
+      } else {
+        color = 'var(--danger)'; iconChar = '!';
+        labelText = 'High Involvement';
+        descText  = `Tumor regions found in ${pct}% of slices — significant spread detected.`;
+      }
+      banner.style.borderColor = color + '44';
+      icon.style.background    = color + '22';
+      icon.style.color         = color;
+      icon.textContent         = iconChar;
+      label.style.color        = color;
+      label.textContent        = labelText;
+      desc.textContent         = descText;
+      fill.style.background    = color;
+      pctEl.style.color        = color;
+      pctEl.textContent        = pct + '%';
+      setTimeout(() => { fill.style.width = pct + '%'; }, 100);
+    }
+
+    /* ── results reveal ── */
     const resultsEl = document.getElementById('resultsSection');
-    const resObs = new MutationObserver(() => {
+    new MutationObserver(() => {
       if (!resultsEl.classList.contains('hidden')) {
         const total = parseFloat(document.getElementById('statTotalSlices').textContent);
         const tumor = parseFloat(document.getElementById('statTumorSlices').textContent);
@@ -236,23 +353,51 @@
         if (!isNaN(total)) animateCount(document.getElementById('statTotalSlices'), total, false);
         if (!isNaN(tumor)) animateCount(document.getElementById('statTumorSlices'), tumor, false);
         if (!isNaN(vol))   animateCount(document.getElementById('statTumorVolume'), vol, true);
+        if (!isNaN(total) && !isNaN(tumor)) setSeverity(tumor, total);
       }
-    });
-    resObs.observe(resultsEl, { attributes: true, attributeFilter: ['class'] });
+    }).observe(resultsEl, { attributes: true, attributeFilter: ['class'] });
 
+    /* ── overlay strip: count badge + empty state + top slice ── */
     document.addEventListener('DOMContentLoaded', () => {
-      const strip = document.getElementById('overlayStrip');
+      const strip   = document.getElementById('overlayStrip');
       const countEl = document.getElementById('detectionsCount');
-      const stripObs = new MutationObserver(() => {
-        const n = strip.children.length;
-        countEl.textContent = n ? `${n} regions` : '';
-      });
-      stripObs.observe(strip, { childList: true });
+      const emptyEl = document.getElementById('detectionsEmpty');
 
+      new MutationObserver(() => {
+        const cards = Array.from(strip.children);
+        const n = cards.length;
+        countEl.textContent = n ? `${n} regions` : '';
+        if (n === 0) {
+          emptyEl.classList.remove('hidden');
+        } else {
+          emptyEl.classList.add('hidden');
+          // Badge the highest density slice
+          let maxPx = -1, maxCard = null;
+          cards.forEach(card => {
+            const px = parseInt(card.dataset.pixels || 0);
+            if (px > maxPx) { maxPx = px; maxCard = card; }
+          });
+          if (maxCard && !maxCard.querySelector('.top-badge')) {
+            maxCard.classList.add('top-slice');
+            const badge = document.createElement('div');
+            badge.className = 'top-badge';
+            badge.textContent = '★ HIGHEST';
+            maxCard.appendChild(badge);
+          }
+        }
+        // filename + time
+        const fnEl = document.getElementById('fileName');
+        const rfEl = document.getElementById('resultsFilename');
+        const rtEl = document.getElementById('resultsTime');
+        if (rfEl) rfEl.textContent = fnEl && fnEl.textContent !== '—' ? fnEl.textContent : '';
+        if (rtEl) rtEl.textContent = new Date().toLocaleTimeString();
+      }).observe(strip, { childList: true });
+
+      /* ── dropzone swap ── */
       const dzIdle  = document.getElementById('dzIdle');
       const dzReady = document.getElementById('dzReady');
       const fnEl    = document.getElementById('fileName');
-      const fnObs = new MutationObserver(() => {
+      new MutationObserver(() => {
         const name = fnEl.textContent;
         if (name && name !== '—') {
           dzIdle.classList.add('hidden');
@@ -261,8 +406,7 @@
           dzIdle.classList.remove('hidden');
           dzReady.classList.add('hidden');
         }
-      });
-      fnObs.observe(fnEl, { childList: true, characterData: true, subtree: true });
+      }).observe(fnEl, { childList: true, characterData: true, subtree: true });
     });
   </script>
 

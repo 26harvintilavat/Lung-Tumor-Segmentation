@@ -4,6 +4,10 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>LungSeg AI — Lung Tumor Segmentation</title>
+  <meta name="description" content="End-to-end lung tumor segmentation from CT scans using an Attention U-Net with 2.5D spatial context, trained on the LIDC-IDRI dataset." />
+  <meta property="og:title" content="LungSeg AI — Lung Tumor Segmentation" />
+  <meta property="og:description" content="Deep learning pipeline for automated lung tumor segmentation from CT scans. Attention U-Net · 2.5D context · LIDC-IDRI dataset." />
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='8' fill='%23080a0d'/><text x='50%25' y='54%25' font-family='system-ui,sans-serif' font-weight='700' font-size='13' fill='%2300f2ff' text-anchor='middle' dominant-baseline='middle'>LS</text></svg>" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
@@ -239,14 +243,179 @@ nav {
   font-size: 10px;
   color: var(--text3);
   letter-spacing: .1em;
+  transition: color .3s;
+}
+.model-card-title.loaded { color: var(--accent); }
+
+/* viewport wrapper — aspect ratio 16:9 */
+.model-card-viewport {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  background: #000;
+  overflow: hidden;
+}
+
+/* skeleton loader */
+.model-skeleton {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, var(--bg2) 25%, var(--bg3) 50%, var(--bg2) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.6s infinite;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  z-index: 2;
+  transition: opacity .4s;
+}
+.model-skeleton.hidden { opacity: 0; pointer-events: none; }
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.skeleton-ring {
+  width: 64px; height: 64px;
+  border-radius: 50%;
+  border: 2px solid rgba(0,242,255,0.15);
+  border-top-color: var(--accent);
+  animation: spin 1.2s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.skeleton-text {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: .12em;
+}
+
+/* fallback CT mockup */
+.model-fallback {
+  position: absolute;
+  inset: 0;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: var(--bg2);
+  z-index: 1;
+}
+.model-fallback.show { display: flex; }
+.fallback-rings {
+  position: relative;
+  width: 120px; height: 120px;
+  display: flex; align-items: center; justify-content: center;
+}
+.fallback-ring {
+  position: absolute;
+  border-radius: 50%;
+  border: 1px solid rgba(0,242,255,0.15);
+  animation: breathe 4s ease-in-out infinite;
+}
+.fallback-ring:nth-child(1) { width: 120px; height: 120px; }
+.fallback-ring:nth-child(2) { width: 80px; height: 86px; border-radius: 50% 50% 50% 50%/55% 55% 45% 45%; animation-delay: .3s; }
+.fallback-ring:nth-child(3) { width: 44px; height: 50px; border-radius: 50% 50% 50% 50%/55% 55% 45% 45%; animation-delay: .6s; }
+.fallback-nodule {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: rgba(0,242,255,.3);
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 10px var(--accent);
+  position: absolute;
+  top: 38%; left: 60%;
+  animation: nodulePulse 2s ease-in-out infinite;
+}
+.fallback-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: .1em;
 }
 
 .model-card iframe {
-  display: block;
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: 420px;
+  height: 100%;
   border: none;
-  background: #000;
+  opacity: 0;
+  transition: opacity .6s ease;
+  z-index: 1;
+}
+.model-card iframe.loaded { opacity: 1; }
+
+/* drag hint overlay */
+.model-drag-hint {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,.6);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(0,242,255,.2);
+  border-radius: 20px;
+  padding: 6px 14px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--accent);
+  letter-spacing: .08em;
+  pointer-events: none;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  animation: hintBob 2s ease-in-out infinite;
+  transition: opacity .4s;
+}
+.model-drag-hint.hide { opacity: 0; }
+@keyframes hintBob {
+  0%,100% { transform: translateX(-50%) translateY(0); }
+  50%      { transform: translateX(-50%) translateY(-4px); }
+}
+
+/* tumor annotation pin */
+.tumor-pin {
+  position: absolute;
+  top: 38%; left: 62%;
+  z-index: 4;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity .6s .8s;
+}
+.tumor-pin.show { opacity: 1; }
+.tumor-pin-dot {
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: rgba(255,60,60,.8);
+  border: 2px solid #ff3c3c;
+  box-shadow: 0 0 12px rgba(255,60,60,.6);
+  animation: pinPulse 1.8s ease-in-out infinite;
+}
+@keyframes pinPulse {
+  0%,100% { box-shadow: 0 0 8px rgba(255,60,60,.5); transform: scale(1); }
+  50%     { box-shadow: 0 0 20px rgba(255,60,60,.8); transform: scale(1.2); }
+}
+.tumor-pin-line {
+  width: 1px; height: 24px;
+  background: linear-gradient(180deg, #ff3c3c, transparent);
+}
+.tumor-pin-label {
+  font-family: var(--mono);
+  font-size: 8px;
+  color: #ff3c3c;
+  letter-spacing: .08em;
+  background: rgba(0,0,0,.7);
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid rgba(255,60,60,.3);
+  white-space: nowrap;
 }
 
 .model-card-footer {
@@ -265,6 +434,27 @@ nav {
 }
 .ct-stat-label { font-family: var(--mono); font-size: 9px; color: var(--text3); letter-spacing: .1em; }
 .ct-stat-val   { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 700; }
+.ct-stat-val.api-live { color: var(--success); }
+
+/* scan line that runs over the model while loading */
+.model-scan-line {
+  position: absolute;
+  left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  box-shadow: 0 0 10px var(--accent);
+  animation: modelScan 2s ease-in-out infinite;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 1;
+  transition: opacity .4s;
+}
+.model-scan-line.hide { opacity: 0; }
+@keyframes modelScan {
+  0%   { top: 0; opacity:1; }
+  85%  { top: 100%; opacity:1; }
+  100% { top: 100%; opacity:0; }
+}
 
 /* ─────────────────────────────────────────
    STATS BAND
@@ -775,24 +965,70 @@ footer {
   <!-- 3D lung model -->
   <div class="hero-visual">
     <div class="model-card">
+
+      <!-- titlebar -->
       <div class="model-card-bar">
         <div class="ct-dot r"></div>
         <div class="ct-dot y"></div>
         <div class="ct-dot g"></div>
-        <div class="model-card-title">3D LUNG MODEL · INTERACTIVE · DRAG TO ROTATE</div>
+        <div class="model-card-title" id="modelCardTitle">LOADING 3D MODEL...</div>
       </div>
-      <iframe
-        title="Realistic Human Lungs"
-        src="https://sketchfab.com/models/ce09f4099a68467880f46e61eb9a3531/embed?autospin=0.3&autostart=1&ui_infos=0&ui_watermark=0&ui_controls=1&ui_stop=0&ui_theme=dark&transparent=1&preload=1"
-        allow="autoplay; fullscreen; xr-spatial-tracking"
-        allowfullscreen>
-      </iframe>
+
+      <!-- viewport -->
+      <div class="model-card-viewport" id="modelViewport">
+
+        <!-- scan line while loading -->
+        <div class="model-scan-line" id="modelScanLine"></div>
+
+        <!-- skeleton -->
+        <div class="model-skeleton" id="modelSkeleton">
+          <div class="skeleton-ring"></div>
+          <span class="skeleton-text">LOADING 3D MODEL</span>
+        </div>
+
+        <!-- fallback (shown if Sketchfab fails) -->
+        <div class="model-fallback" id="modelFallback">
+          <div class="fallback-rings">
+            <div class="fallback-ring"></div>
+            <div class="fallback-ring"></div>
+            <div class="fallback-ring"></div>
+            <div class="fallback-nodule"></div>
+          </div>
+          <span class="fallback-label">LUNG ANATOMY · CT VIEW</span>
+        </div>
+
+        <!-- sketchfab iframe — no autospin, only spins on hover -->
+        <iframe
+          id="modelIframe"
+          title="Realistic Human Lungs"
+          src="https://sketchfab.com/models/ce09f4099a68467880f46e61eb9a3531/embed?autospin=0&autostart=1&ui_infos=0&ui_watermark=0&ui_controls=1&ui_stop=0&ui_theme=dark&transparent=1&preload=1"
+          allow="autoplay; fullscreen; xr-spatial-tracking"
+          allowfullscreen>
+        </iframe>
+
+        <!-- tumor annotation pin -->
+        <div class="tumor-pin" id="tumorPin">
+          <div class="tumor-pin-dot"></div>
+          <div class="tumor-pin-line"></div>
+          <div class="tumor-pin-label">TUMOR REGION</div>
+        </div>
+
+        <!-- drag hint -->
+        <div class="model-drag-hint" id="modelDragHint">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20"/></svg>
+          DRAG TO ROTATE
+        </div>
+
+      </div>
+
+      <!-- footer with live API stat -->
       <div class="model-card-footer">
         <div class="ct-stat"><span class="ct-stat-label">MODEL</span><span class="ct-stat-val">ATTN U-NET</span></div>
         <div class="ct-stat"><span class="ct-stat-label">INPUT</span><span class="ct-stat-val">256×256×3</span></div>
         <div class="ct-stat"><span class="ct-stat-label">CONTEXT</span><span class="ct-stat-val">2.5D</span></div>
-        <div class="ct-stat"><span class="ct-stat-label">DATASET</span><span class="ct-stat-val">LIDC-IDRI</span></div>
+        <div class="ct-stat"><span class="ct-stat-label">API</span><span class="ct-stat-val" id="footerApiStat">CHECKING...</span></div>
       </div>
+
     </div>
   </div>
 </div>
@@ -1312,6 +1548,71 @@ const barIO = new IntersectionObserver((entries)=>{
   });
 },{ threshold:.3 });
 barEls.forEach(el=>barIO.observe(el));
+
+/* ──────────────────────────────────────
+   3D MODEL CARD LOGIC
+────────────────────────────────────── */
+(function(){
+  const iframe    = document.getElementById('modelIframe');
+  const skeleton  = document.getElementById('modelSkeleton');
+  const scanLine  = document.getElementById('modelScanLine');
+  const dragHint  = document.getElementById('modelDragHint');
+  const tumorPin  = document.getElementById('tumorPin');
+  const title     = document.getElementById('modelCardTitle');
+  const fallback  = document.getElementById('modelFallback');
+  const apiStat   = document.getElementById('footerApiStat');
+  const viewport  = document.getElementById('modelViewport');
+
+  if (!iframe) return;
+
+  // Fallback timeout — if iframe doesn't load in 8s, show CT mockup
+  const fallbackTimer = setTimeout(() => {
+    skeleton.classList.add('hidden');
+    scanLine.classList.add('hide');
+    fallback.classList.add('show');
+    title.textContent = 'LUNG ANATOMY · CT VIEW · OFFLINE';
+  }, 8000);
+
+  // When iframe loads successfully
+  iframe.addEventListener('load', () => {
+    clearTimeout(fallbackTimer);
+    // Small delay so the model actually renders before we show it
+    setTimeout(() => {
+      iframe.classList.add('loaded');
+      skeleton.classList.add('hidden');
+      scanLine.classList.add('hide');
+      title.textContent = '3D LUNG MODEL · INTERACTIVE';
+      title.classList.add('loaded');
+      // Show pin and hint after model is visible
+      setTimeout(() => {
+        tumorPin.classList.add('show');
+        dragHint.style.opacity = '1';
+      }, 600);
+    }, 1200);
+  });
+
+  // Hide drag hint on first interaction
+  let hinted = false;
+  viewport.addEventListener('mousedown', () => {
+    if (!hinted) {
+      hinted = true;
+      dragHint.classList.add('hide');
+      tumorPin.style.opacity = '0';
+    }
+  });
+
+  // Live API status in footer
+  fetch('http://localhost:8000/health')
+    .then(r => r.json())
+    .then(d => {
+      apiStat.textContent  = d.model_loaded ? 'ONLINE' : 'NO MODEL';
+      apiStat.classList.toggle('api-live', d.model_loaded);
+    })
+    .catch(() => {
+      apiStat.textContent = 'OFFLINE';
+      apiStat.style.color = 'var(--danger)';
+    });
+})();
 </script>
 
 </body>

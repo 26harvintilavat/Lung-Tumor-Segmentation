@@ -1,17 +1,18 @@
-# 🫁 Lung Tumor Segmentation
+# 🫁 LungSeg AI — Lung Tumor Segmentation
 
-Automated lung tumor segmentation from CT scans using 
-Attention U-Net deep learning architecture, trained on 
-the LIDC-IDRI dataset.
+Automated lung tumor segmentation from CT scans using an Attention U-Net deep learning architecture, trained on the LIDC-IDRI dataset. Includes a full-stack web interface for uploading DICOM scans and visualising predictions.
 
-![Python](https://img.shields.io/badge/Python-3.14-blue)
+![Python](https://img.shields.io/badge/Python-3.11-blue)
 ![PyTorch](https://img.shields.io/badge/PyTorch-2.0-orange)
 ![FastAPI](https://img.shields.io/badge/FastAPI-0.100-green)
 ![Val Dice](https://img.shields.io/badge/Val%20Dice-0.7545-brightgreen)
 
+> ⚠️ **Research use only** — not intended for clinical diagnosis or medical decision-making.
+
 ---
 
 ## 📋 Table of Contents
+- [Quickstart](#quickstart)
 - [Overview](#overview)
 - [Architecture](#architecture)
 - [Dataset](#dataset)
@@ -20,18 +21,37 @@ the LIDC-IDRI dataset.
 - [Installation](#installation)
 - [Usage](#usage)
 - [API](#api)
+- [Configuration](#configuration)
+- [References](#references)
+
+---
+
+## ⚡ Quickstart
+
+```bash
+git clone https://github.com/26harvintilavat/Lung-Tumor-Segmentation.git
+cd Lung-Tumor-Segmentation
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install -r requirements.txt
+# Place best_model.pth in checkpoints/ (ask the author)
+./start.sh
+```
+
+`start.sh` starts the API, serves the frontend, and opens your browser automatically.  
+Visit **http://localhost:3000/index.html** — landing page with project details.  
+Visit **http://localhost:3000/tool.html** — the segmentation tool.
 
 ---
 
 ## 🔍 Overview
 
-This project implements an end-to-end pipeline for 
-lung tumor segmentation from CT scans:
+End-to-end pipeline for lung tumor segmentation from CT scans:
 
-- **Input**: Raw DICOM CT scan files
-- **Output**: Binary tumor segmentation masks
-- **Model**: Attention U-Net with 3-slice context window
+- **Input**: Raw DICOM CT scan files (uploaded as a ZIP)
+- **Output**: Binary tumor segmentation masks + annotated overlays
+- **Model**: Attention U-Net with 2.5D (3-slice) context window
 - **API**: FastAPI REST endpoint for inference
+- **Frontend**: Interactive web interface with landing page and tool
 - **Performance**: Val Dice Score of 0.7545
 
 ---
@@ -39,37 +59,37 @@ lung tumor segmentation from CT scans:
 ## 🧠 Architecture
 
 ### Attention U-Net
-- **Input channels**: 3 (previous + current + next slice)
+- **Input channels**: 3 (previous + current + next slice — 2.5D context)
 - **Output channels**: 1 (binary tumor mask)
 - **Input size**: 256 × 256
+- **Encoder depth**: 5 levels (32 → 64 → 128 → 256 → 512 filters)
 - **Key features**:
-  - Attention gates for focusing on tumor regions
-  - Skip connections for preserving spatial information
-  - 3-slice context window for 3D awareness
+  - Attention gates on every skip connection
+  - 2.5D input strategy for volumetric context without 3D memory cost
+  - Dropout (0.1) for regularisation
 
-### Loss Function
-- **TverskyFocal Loss**
-  - Tversky loss (α=0.3, β=0.7) for class imbalance
-  - Focal loss (γ=2.0) for hard examples
-  - Combined weight: 70% Tversky + 30% Focal
+### Loss Function — TverskyFocal
+- **Tversky loss** (α=0.3, β=0.7) — penalises False Negatives (missed tumors) more heavily
+- **Focal loss** (γ=2.0) — focuses training on hard boundary pixels
+- **Combined weight**: 70% Tversky + 30% Focal
 
 ---
 
 ## 📦 Dataset
 
-**LIDC-IDRI** (Lung Image Database Consortium)
-- 150+ patients
-- Raw DICOM CT scans
-- JSON annotations converted to binary masks
+**LIDC-IDRI** (Lung Image Database Consortium and Image Database Resource Initiative)
+- 1,010 patients, ~240,000 CT slices
+- Raw DICOM CT scans with XML annotations from 4 radiologists
 - Patient-level train/val split (75/25)
+- Extreme class imbalance — tumor voxels < 0.5% of total
 
 ### Preprocessing Pipeline
-1. HU conversion from raw DICOM
-2. Isotropic resampling to 1mm spacing
-3. Lung window clipping (-1000 to 400 HU)
-4. Z-score normalization → rescaled to [0,1]
-5. Lung bounding box cropping
-6. Resize to 256×256
+1. HU conversion from raw DICOM pixel values
+2. Isotropic resampling to 1 mm spacing (SimpleITK)
+3. Lung window clipping (−1000 to 400 HU)
+4. Z-score normalisation → rescaled to [0, 1]
+5. Automatic lung bounding box cropping
+6. Resize to 256 × 256
 
 ---
 
@@ -80,7 +100,7 @@ lung tumor segmentation from CT scans:
 | Val Dice Score | **0.7545** |
 | Train Dice Score | **0.7865** |
 | Val Loss | **0.1682** |
-| Best Epoch | **38/50** |
+| Best Epoch | **38 / 50** |
 | Architecture | Attention U-Net |
 | Dataset | LIDC-IDRI |
 
@@ -89,21 +109,28 @@ lung tumor segmentation from CT scans:
 |-----------|-------|
 | Batch Size | 2 |
 | Learning Rate | 3e-4 |
-| Scheduler | Warmup + CosineAnnealing |
+| Scheduler | Warmup (5 ep) + CosineAnnealing |
 | Optimizer | Adam |
 | Epochs | 50 |
 | Early Stopping | Patience 15 |
-| Image Size | 256×256 |
-| GPU | NVIDIA RTX 3050 4GB |
+| Image Size | 256 × 256 |
+| GPU | NVIDIA RTX 3050 4 GB |
 
 ---
 
 ## 📁 Project Structure
+
 ```
 Lung-Tumor-Segmentation/
 │
+├── frontend/
+│   ├── index.html           ← Landing page (project showcase)
+│   ├── tool.html            ← Segmentation tool UI
+│   ├── app.js               ← Frontend logic
+│   └── style.css            ← Styles
+│
 ├── api/
-│   └── main.py              ← FastAPI endpoint
+│   └── main.py              ← FastAPI inference endpoint
 │
 ├── configs/
 │   └── config.py            ← Training configuration
@@ -121,14 +148,14 @@ Lung-Tumor-Segmentation/
 │   └── evaluate.py          ← Model evaluation
 │
 ├── src/
-│   ├── model.py             ← Attention U-Net
+│   ├── model.py             ← Attention U-Net (MONAI)
 │   ├── losses.py            ← TverskyFocal Loss
-│   ├── preprocessing.py     ← CT preprocessing
+│   ├── preprocessing.py     ← CT preprocessing utilities
 │   ├── dataset.py           ← Base dataset
 │   └── train_dataset.py     ← Training dataset
 │
-├── checkpoints/             ← Saved models (not tracked)
-├── test_viewer.html         ← Web UI for visualization
+├── checkpoints/             ← Saved model weights (not tracked)
+├── start.sh                 ← One-command launcher
 ├── requirements.txt
 └── README.md
 ```
@@ -147,11 +174,11 @@ cd Lung-Tumor-Segmentation
 ```bash
 python -m venv venv
 
+# macOS / Linux
+source venv/bin/activate
+
 # Windows
 venv\Scripts\activate
-
-# Linux/Mac
-source venv/bin/activate
 ```
 
 ### 3. Install Dependencies
@@ -159,39 +186,51 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### 4. Get Model Weights
+The trained weights are not stored in the repo (file size). Contact the author for `best_model.pth` and place it at:
+```
+checkpoints/best_model.pth
+```
+
 ---
 
 ## 🚀 Usage
 
-### Step 1 — Download & Prepare Data
+### Option A — One command (recommended)
 ```bash
-# Download LIDC-IDRI dataset
+./start.sh
+```
+Starts the API, serves the frontend, and opens the browser automatically.
+
+### Option B — Manual
+
+**Terminal 1 — API:**
+```bash
+source venv/bin/activate
+uvicorn api.main:app --host localhost --port 8000
+```
+
+**Terminal 2 — Frontend:**
+```bash
+cd frontend
+python -m http.server 3000
+```
+
+Then open **http://localhost:3000/index.html**
+
+### Training from scratch
+```bash
+# 1. Download LIDC-IDRI dataset
 python scripts/lidc_downloader.py
 
-# Generate masks from annotations
+# 2. Generate masks from annotations
 python scripts/json_to_mask.py
 
-# Cache preprocessed data
+# 3. Cache preprocessed data
 python scripts/prepare_dataloaders.py
-```
 
-### Step 2 — Train Model
-```bash
+# 4. Train
 python scripts/train.py
-```
-
-### Step 3 — Run API
-```bash
-python api/main.py
-```
-
-### Step 4 — Open Web UI
-```bash
-# In new terminal
-python -m http.server 3000
-
-# Open browser
-http://localhost:3000/test_viewer.html
 ```
 
 ---
@@ -202,9 +241,9 @@ http://localhost:3000/test_viewer.html
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/health` | API health check |
-| GET | `/model-info` | Model details |
-| POST | `/predict` | Run segmentation |
+| GET | `/health` | API health check + model status |
+| GET | `/model-info` | Architecture and training details |
+| POST | `/predict` | Run segmentation on a DICOM ZIP |
 
 ### Example Request
 ```bash
@@ -230,7 +269,7 @@ curl -X POST http://localhost:8000/predict \
 }
 ```
 
-### Swagger UI
+### Swagger UI (interactive docs)
 ```
 http://localhost:8000/docs
 ```
@@ -239,7 +278,7 @@ http://localhost:8000/docs
 
 ## 🔧 Configuration
 
-Edit `configs/config.py`:
+Edit `configs/config.py` to change training parameters:
 ```python
 EPOCHS          = 50
 BATCH_SIZE      = 2
@@ -255,13 +294,14 @@ COSINE_EPOCHS   = 45
 
 ## 📚 References
 
-- LIDC-IDRI Dataset: [https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI](https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI)
+- LIDC-IDRI Dataset: [Cancer Imaging Archive](https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI)
 - Attention U-Net: [Oktay et al., 2018](https://arxiv.org/abs/1804.03999)
 - Tversky Loss: [Salehi et al., 2017](https://arxiv.org/abs/1706.05721)
+- MONAI Framework: [monai.io](https://monai.io)
 
 ---
 
 ## 👨‍💻 Author
 
-Built as part of a deep learning project for 
-medical image segmentation.
+Built by **Harvin Tilavat** as a deep learning project for medical image segmentation.  
+GitHub: [@26harvintilavat](https://github.com/26harvintilavat)

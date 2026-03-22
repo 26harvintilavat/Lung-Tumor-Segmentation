@@ -8,7 +8,8 @@ import torch
 import cv2
 import pydicom
 import uvicorn
-from fastapi import FastAPI, File, UploadFile, HTTPException
+from fastapi import FastAPI, File, UploadFile, HTTPException, Request
+from contextlib import asynccontextmanager
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 import tempfile
@@ -29,7 +30,8 @@ from src.preprocessing import (
 app = FastAPI(
     title="Lung Tumor Segmentation API",
     description="Attention U-Net based lung tumor segmentation",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 app.add_middleware(
     CORSMiddleware,
@@ -41,6 +43,8 @@ app.add_middleware(
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = None
 MODEL_PATH = PROJECT_ROOT/"checkpoints"/"best_model.pth"
+MODEL_INFO_CACHE = None        # cached at startup, never re-read from disk
+MAX_UPLOAD_MB = 500            # reject ZIPs larger than this
 
 def load_model():
     global model
@@ -61,11 +65,26 @@ def load_model():
     model.eval()
     print(f"Model ready on {device}")
 
-@app.on_event("startup")
-async def startup_event():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global MODEL_INFO_CACHE
     print("Loading model...")
     load_model()
+    # Cache model info so /model-info never hits disk again
+    if MODEL_PATH.exists():
+        checkpoint = torch.load(MODEL_PATH, map_location="cpu", weights_only=False)
+        MODEL_INFO_CACHE = {
+            'architecture': "Attention U-Net",
+            'in_channels': 3,
+            'out_channels': 1,
+            'input_size': "256x256",
+            'trained_epoch': checkpoint.get('epoch', 'N/A'),
+            'best_val_dice': checkpoint.get('best_val_dice', 'N/A'),
+            'device': str(device)
+        }
+        del checkpoint
     print("API ready!")
+    yield
 
 def preprocess_dicom_series(dicom_files):
     """Preprocess list of DICOM files into model input"""
@@ -177,22 +196,10 @@ async def health_check():
 @app.get("/model-info")
 async def model_info():
     if model is None:
-        raise HTTPException(
-            status_code=503,
-            detail="Model not loaded"
-        )
-    
-    checkpoint = torch.load(MODEL_PATH, map_location="cpu")
-
-    return {
-        'architecture': "Attention U-Net",
-        'in_channels': 3,
-        'out_channels': 1,
-        'input_size': "256x256",
-        'trained_epoch': checkpoint.get('epoch', 'N/A'),
-        'best_val_dice': checkpoint.get('best_val_dice', 'N/A'),
-        'device': str(device)
-    }
+        raise HTTPException(status_code=503, detail="Model not loaded")
+    if MODEL_INFO_CACHE is None:
+        raise HTTPException(status_code=503, detail="Model info not available")
+    return MODEL_INFO_CACHE
 
 @app.post("/predict")
 async def predict(file: UploadFile = File(...)):
@@ -211,9 +218,17 @@ async def predict(file: UploadFile = File(...)):
             status_code=400,
             detail="Please upload a ZIP file containing DICOM files"
         )
+
+    # File size guard — read first chunk to check Content-Length or stream size
+    contents = await file.read()
+    size_mb = len(contents) / (1024 * 1024)
+    if size_mb > MAX_UPLOAD_MB:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large ({size_mb:.0f} MB). Maximum allowed: {MAX_UPLOAD_MB} MB"
+        )
     
-    try: 
-        contents = await file.read()
+    try:
         zip_buffer = io.BytesIO(contents)
 
         with tempfile.TemporaryDirectory() as tmpdir:
