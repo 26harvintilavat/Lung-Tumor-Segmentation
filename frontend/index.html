@@ -202,7 +202,7 @@ nav {
 }
 .btn-ghost:hover { border-color: var(--border-hi); color: var(--text); }
 
-/* ── hero CT visual ── */
+/* ── hero 3D visual ── */
 .hero-visual {
   opacity: 0;
   animation: fadeUp .8s .5s forwards;
@@ -210,16 +210,16 @@ nav {
   width: min(700px, 90vw);
 }
 
-.ct-mockup {
+.model-card {
   width: 100%;
   background: var(--bg2);
   border: 1px solid var(--border-hi);
   border-radius: 20px;
   overflow: hidden;
-  position: relative;
+  box-shadow: 0 0 60px rgba(0,242,255,0.06);
 }
 
-.ct-mockup-bar {
+.model-card-bar {
   height: 40px;
   background: var(--bg3);
   border-bottom: 1px solid var(--border);
@@ -232,7 +232,7 @@ nav {
 .ct-dot.r { background: #ff5f57; }
 .ct-dot.y { background: #febc2e; }
 .ct-dot.g { background: #28c840; }
-.ct-mockup-title {
+.model-card-title {
   margin-left: auto;
   margin-right: auto;
   font-family: var(--mono);
@@ -241,74 +241,15 @@ nav {
   letter-spacing: .1em;
 }
 
-.ct-mockup-body {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 1px;
-  background: var(--border);
-  padding: 1px;
+.model-card iframe {
+  display: block;
+  width: 100%;
+  height: 420px;
+  border: none;
+  background: #000;
 }
 
-.ct-slice {
-  aspect-ratio: 1;
-  background: #050608;
-  position: relative;
-  overflow: hidden;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ct-slice svg {
-  width: 85%;
-  height: 85%;
-  opacity: .7;
-}
-
-/* scan line on the middle slice */
-.ct-slice.active .scan-overlay {
-  position: absolute;
-  left: 0; right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, transparent, var(--accent), transparent);
-  box-shadow: 0 0 10px var(--accent);
-  animation: scanDown 2s ease-in-out infinite;
-  z-index: 2;
-}
-@keyframes scanDown {
-  0%   { top: 0; opacity:1; }
-  85%  { top: 100%; opacity:1; }
-  100% { top: 100%; opacity:0; }
-}
-
-/* tumor highlight blob on right slice */
-.tumor-blob {
-  position: absolute;
-  width: 22%;
-  aspect-ratio: 1;
-  border-radius: 50%;
-  background: rgba(0,242,255,0.25);
-  border: 1.5px solid var(--accent);
-  box-shadow: 0 0 14px var(--accent-glow);
-  top: 42%; left: 58%;
-  transform: translate(-50%,-50%);
-  animation: blobPulse 2.2s ease-in-out infinite;
-}
-@keyframes blobPulse {
-  0%,100% { transform: translate(-50%,-50%) scale(1);    box-shadow: 0 0 10px var(--accent-glow); }
-  50%     { transform: translate(-50%,-50%) scale(1.12); box-shadow: 0 0 24px var(--accent); }
-}
-
-.ct-slice-label {
-  position: absolute;
-  bottom: 6px; left: 8px;
-  font-family: var(--mono);
-  font-size: 9px;
-  color: rgba(0,242,255,.5);
-  letter-spacing: .06em;
-}
-
-.ct-mockup-footer {
+.model-card-footer {
   height: 44px;
   background: var(--bg3);
   border-top: 1px solid var(--border);
@@ -831,35 +772,22 @@ footer {
     </a>
   </div>
 
-  <!-- CT mockup preview -->
+  <!-- 3D lung model -->
   <div class="hero-visual">
-    <div class="ct-mockup">
-      <div class="ct-mockup-bar">
+    <div class="model-card">
+      <div class="model-card-bar">
         <div class="ct-dot r"></div>
         <div class="ct-dot y"></div>
         <div class="ct-dot g"></div>
-        <div class="ct-mockup-title">LIDC-IDRI-0001 · Axial View · 133 slices</div>
+        <div class="model-card-title">3D LUNG MODEL · INTERACTIVE · DRAG TO ROTATE</div>
       </div>
-      <div class="ct-mockup-body">
-        <!-- slice -1 -->
-        <div class="ct-slice">
-          <svg viewBox="0 0 100 100" fill="none"><ellipse cx="50" cy="50" rx="42" ry="44" stroke="rgba(0,242,255,0.15)" stroke-width="1"/><ellipse cx="50" cy="50" rx="28" ry="30" stroke="rgba(0,242,255,0.1)" stroke-width="1"/><ellipse cx="50" cy="50" rx="14" ry="16" stroke="rgba(0,242,255,0.07)" stroke-width="1"/><ellipse cx="34" cy="50" rx="10" ry="13" stroke="rgba(0,242,255,0.12)" stroke-width="1"/><ellipse cx="66" cy="50" rx="10" ry="13" stroke="rgba(0,242,255,0.12)" stroke-width="1"/></svg>
-          <span class="ct-slice-label">z-1</span>
-        </div>
-        <!-- slice 0 (active: scan line) -->
-        <div class="ct-slice active">
-          <div class="scan-overlay"></div>
-          <svg viewBox="0 0 100 100" fill="none"><ellipse cx="50" cy="50" rx="42" ry="44" stroke="rgba(0,242,255,0.2)" stroke-width="1"/><ellipse cx="50" cy="50" rx="28" ry="30" stroke="rgba(0,242,255,0.14)" stroke-width="1"/><ellipse cx="50" cy="50" rx="14" ry="16" stroke="rgba(0,242,255,0.1)" stroke-width="1"/><ellipse cx="34" cy="50" rx="10" ry="13" stroke="rgba(0,242,255,0.18)" stroke-width="1"/><ellipse cx="66" cy="50" rx="10" ry="13" stroke="rgba(0,242,255,0.18)" stroke-width="1"/></svg>
-          <span class="ct-slice-label">z</span>
-        </div>
-        <!-- slice +1 (tumor highlighted) -->
-        <div class="ct-slice">
-          <svg viewBox="0 0 100 100" fill="none"><ellipse cx="50" cy="50" rx="42" ry="44" stroke="rgba(0,242,255,0.15)" stroke-width="1"/><ellipse cx="50" cy="50" rx="28" ry="30" stroke="rgba(0,242,255,0.1)" stroke-width="1"/><ellipse cx="50" cy="50" rx="14" ry="16" stroke="rgba(0,242,255,0.07)" stroke-width="1"/><ellipse cx="34" cy="50" rx="10" ry="13" stroke="rgba(0,242,255,0.12)" stroke-width="1"/><ellipse cx="66" cy="50" rx="10" ry="13" stroke="rgba(0,242,255,0.12)" stroke-width="1"/></svg>
-          <div class="tumor-blob"></div>
-          <span class="ct-slice-label">z+1</span>
-        </div>
-      </div>
-      <div class="ct-mockup-footer">
+      <iframe
+        title="Realistic Human Lungs"
+        src="https://sketchfab.com/models/ce09f4099a68467880f46e61eb9a3531/embed?autospin=0.3&autostart=1&ui_infos=0&ui_watermark=0&ui_controls=1&ui_stop=0&ui_theme=dark&transparent=1&preload=1"
+        allow="autoplay; fullscreen; xr-spatial-tracking"
+        allowfullscreen>
+      </iframe>
+      <div class="model-card-footer">
         <div class="ct-stat"><span class="ct-stat-label">MODEL</span><span class="ct-stat-val">ATTN U-NET</span></div>
         <div class="ct-stat"><span class="ct-stat-label">INPUT</span><span class="ct-stat-val">256×256×3</span></div>
         <div class="ct-stat"><span class="ct-stat-label">CONTEXT</span><span class="ct-stat-val">2.5D</span></div>

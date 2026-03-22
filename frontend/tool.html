@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LungSeg AI — Segmentation Tool</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css" />
+  <style>
+    .back-nav {
+      position: fixed;
+      top: 22px; left: 24px;
+      font-family: var(--mono);
+      font-size: 11px;
+      color: var(--text2);
+      text-decoration: none;
+      letter-spacing: .06em;
+      z-index: 100;
+      transition: color .2s;
+    }
+    .back-nav:hover { color: var(--accent); }
+  </style>
+</head>
+<body>
+
+  <!-- back link -->
+  <a href="index.html" class="back-nav">← About</a>
+
+  <!-- API status -->
+  <div class="api-status">
+    <div id="statusDot" class="status-dot"></div>
+    <span class="api-label">API</span>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       HERO
+  ════════════════════════════════════════ -->
+  <section class="hero">
+
+    <!-- animated background: CT raster lines -->
+    <div class="raster" aria-hidden="true">
+      <div class="raster-lines"></div>
+      <!-- floating anatomy blobs -->
+      <div class="lung-blob left" aria-hidden="true"></div>
+      <div class="lung-blob right" aria-hidden="true"></div>
+    </div>
+
+    <div class="hero-inner">
+
+      <!-- wordmark -->
+      <div class="wordmark-wrap">
+        <h1 class="wordmark">LungSeg <span>AI</span></h1>
+        <p class="tagline">Attention U-Net · 2.5D CT Tumor Segmentation</p>
+        <div class="pill-row">
+          <span class="pill">Attention U-Net</span>
+          <span class="pill">2.5D Context Windows</span>
+          <span class="pill">LIDC-IDRI Dataset</span>
+          <span class="pill">PyTorch · FastAPI</span>
+        </div>
+      </div>
+
+      <!-- how it works strip -->
+      <div class="how-strip">
+        <div class="how-step">
+          <div class="how-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+          </div>
+          <span class="how-label">Upload DICOM ZIP</span>
+        </div>
+        <div class="how-arrow">→</div>
+        <div class="how-step">
+          <div class="how-icon pulse-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><polyline points="8 21 12 17 16 21"/></svg>
+          </div>
+          <span class="how-label">Preprocess &amp; Infer</span>
+        </div>
+        <div class="how-arrow">→</div>
+        <div class="how-step">
+          <div class="how-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          </div>
+          <span class="how-label">View Detections</span>
+        </div>
+      </div>
+
+      <!-- upload card -->
+      <div class="upload-card">
+        <div id="dropzone" class="dropzone">
+          <input type="file" id="fileInput" accept=".zip" hidden />
+
+          <!-- idle state -->
+          <div class="dz-idle" id="dzIdle">
+            <div class="dz-icon">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            </div>
+            <p class="dz-primary">Drop DICOM ZIP here</p>
+            <p class="dz-secondary">or click to browse</p>
+          </div>
+
+          <!-- ready state -->
+          <div class="dz-ready hidden" id="dzReady">
+            <div class="dz-icon ready">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+            <p class="dz-filename" id="fileName">—</p>
+            <p class="dz-secondary">Ready · click to change</p>
+          </div>
+        </div>
+
+        <button id="runBtn" class="run-btn" disabled>
+          <span class="run-btn-text">Run Segmentation</span>
+          <span class="run-btn-arrow">→</span>
+        </button>
+
+        <div id="errorMessage" class="error-msg hidden"></div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- ═══════════════════════════════════════
+       LOADER
+  ════════════════════════════════════════ -->
+  <div id="loader" class="loader-overlay hidden">
+    <div class="scan-box">
+      <div class="scan-label-top">RUNNING INFERENCE</div>
+      <div class="scan-viewport">
+        <div class="scan-line"></div>
+        <!-- mock CT slices -->
+        <div class="mock-ct">
+          <div class="ct-ring r1"></div>
+          <div class="ct-ring r2"></div>
+          <div class="ct-ring r3"></div>
+          <div class="ct-nodule"></div>
+        </div>
+      </div>
+      <div class="scan-steps">
+        <div class="step active" id="step1">① HU Conversion</div>
+        <div class="step" id="step2">② Resampling</div>
+        <div class="step" id="step3">③ U-Net Inference</div>
+        <div class="step" id="step4">④ Mask Generation</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════
+       RESULTS
+  ════════════════════════════════════════ -->
+  <section id="resultsSection" class="results hidden">
+
+    <div class="results-header">
+      <div class="results-title-wrap">
+        <h2 class="results-title">Segmentation Results</h2>
+        <div class="results-line"></div>
+      </div>
+    </div>
+
+    <!-- stat cards -->
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-glow"></div>
+        <span class="stat-label">Total Slices</span>
+        <span id="statTotalSlices" class="stat-value">—</span>
+        <span class="stat-unit">axial cuts</span>
+      </div>
+      <div class="stat-card accent">
+        <div class="stat-glow"></div>
+        <span class="stat-label">Tumor Slices</span>
+        <span id="statTumorSlices" class="stat-value">—</span>
+        <span class="stat-unit">with detection</span>
+      </div>
+      <div class="stat-card">
+        <div class="stat-glow"></div>
+        <span class="stat-label">Tumor Volume</span>
+        <span id="statTumorVolume" class="stat-value">—</span>
+        <span class="stat-unit">voxels</span>
+      </div>
+    </div>
+
+    <!-- overlay strip -->
+    <div class="detections-section">
+      <div class="detections-header">
+        <span class="detections-label">Tumor Detections</span>
+        <span class="detections-count" id="detectionsCount"></span>
+      </div>
+      <div id="overlayStrip" class="overlay-strip"></div>
+    </div>
+
+  </section>
+
+  <script src="app.js"></script>
+
+  <script>
+    let stepTimer = null;
+    const steps = ['step1','step2','step3','step4'];
+
+    function startSteps() {
+      let i = 0;
+      steps.forEach(id => document.getElementById(id).className = 'step');
+      document.getElementById(steps[0]).classList.add('active');
+      stepTimer = setInterval(() => {
+        i = (i + 1) % steps.length;
+        steps.forEach(id => document.getElementById(id).className = 'step');
+        document.getElementById(steps[i]).classList.add('active');
+      }, 900);
+    }
+    function stopSteps() { clearInterval(stepTimer); }
+
+    const loaderEl = document.getElementById('loader');
+    const obs = new MutationObserver(() => {
+      if (!loaderEl.classList.contains('hidden')) startSteps();
+      else stopSteps();
+    });
+    obs.observe(loaderEl, { attributes: true, attributeFilter: ['class'] });
+
+    function animateCount(el, target, isFloat) {
+      const dur = 900, step = 16;
+      const frames = dur / step;
+      let frame = 0;
+      const timer = setInterval(() => {
+        frame++;
+        const val = target * (frame / frames);
+        el.textContent = isFloat ? val.toFixed(1) : Math.round(val);
+        if (frame >= frames) { el.textContent = isFloat ? target.toFixed(2) : target; clearInterval(timer); }
+      }, step);
+    }
+
+    const resultsEl = document.getElementById('resultsSection');
+    const resObs = new MutationObserver(() => {
+      if (!resultsEl.classList.contains('hidden')) {
+        const total = parseFloat(document.getElementById('statTotalSlices').textContent);
+        const tumor = parseFloat(document.getElementById('statTumorSlices').textContent);
+        const vol   = parseFloat(document.getElementById('statTumorVolume').textContent);
+        if (!isNaN(total)) animateCount(document.getElementById('statTotalSlices'), total, false);
+        if (!isNaN(tumor)) animateCount(document.getElementById('statTumorSlices'), tumor, false);
+        if (!isNaN(vol))   animateCount(document.getElementById('statTumorVolume'), vol, true);
+      }
+    });
+    resObs.observe(resultsEl, { attributes: true, attributeFilter: ['class'] });
+
+    document.addEventListener('DOMContentLoaded', () => {
+      const strip = document.getElementById('overlayStrip');
+      const countEl = document.getElementById('detectionsCount');
+      const stripObs = new MutationObserver(() => {
+        const n = strip.children.length;
+        countEl.textContent = n ? `${n} regions` : '';
+      });
+      stripObs.observe(strip, { childList: true });
+
+      const dzIdle  = document.getElementById('dzIdle');
+      const dzReady = document.getElementById('dzReady');
+      const fnEl    = document.getElementById('fileName');
+      const fnObs = new MutationObserver(() => {
+        const name = fnEl.textContent;
+        if (name && name !== '—') {
+          dzIdle.classList.add('hidden');
+          dzReady.classList.remove('hidden');
+        } else {
+          dzIdle.classList.remove('hidden');
+          dzReady.classList.add('hidden');
+        }
+      });
+      fnObs.observe(fnEl, { childList: true, characterData: true, subtree: true });
+    });
+  </script>
+
+</body>
+</html>
