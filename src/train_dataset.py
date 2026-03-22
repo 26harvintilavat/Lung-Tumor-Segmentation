@@ -6,6 +6,7 @@ import torchvision.transforms as T
 from torchvision.transforms import InterpolationMode
 import torchvision.transforms.functional as TF
 import random
+import pydicom
 
 from src.preprocessing import (
     convert_to_hu,
@@ -18,99 +19,55 @@ from src.preprocessing import (
     get_tumor_slices,
     verify_image_mask_alignment,
 )
-import pydicom
 
 
 class LungSegmentationDataset(Dataset):
-    """
-    Patient-level dataset for lung tumor segmentation.
-    - Loads + preprocesses entire volume per patient at init
-    - Precomputes lung bboxes once
-    - Builds balanced tumor/background sample list
-    - Applies consistent augmentation to image + mask
-    """
+
 
     def __init__(
         self,
         raw_dir,
         mask_dir,
         patient_ids,
-        img_size=384,
-        augment=False,              #  controllable — True for train, False for val
-        min_tumor_pixels=10,        #  filter noise annotations
-        bg_ratio=2,                  
+        img_size=256,
+        augment=False,
+        min_tumor_pixels=10,
+        bg_ratio=2,
     ):
         self.img_size  = img_size
         self.augment   = augment
         self.bg_ratio  = bg_ratio
+        self.raw_dir   = Path(raw_dir)
+        self.mask_dir  = Path(mask_dir)
 
-        self.patient_volumes = {}
-        self.patient_masks   = {}
-        self.patient_bboxes  = {}   # precomputed per slice per patient
+        self.tumor_samples = []
+        self.bg_samples    = []
 
-        self.tumor_samples  = []    # separated for dynamic sampling
-        self.bg_samples     = []
-
-        raw_dir  = Path(raw_dir)
-        mask_dir = Path(mask_dir)
+        
+        self.patient_series_dirs = {}
 
         for pid in patient_ids:
-            patient_raw_dir = raw_dir / pid
-            series_dirs = [d for d in patient_raw_dir.iterdir() if d.is_dir()]
-
+            patient_raw_dir = self.raw_dir / pid
+            series_dirs = [
+                d for d in patient_raw_dir.iterdir()
+                if d.is_dir()
+            ]
             if not series_dirs:
-                print(f"  [SKIP] No series found for patient {pid}")
+                print(f"  [SKIP] No series for {pid}")
                 continue
 
-            mask_path = mask_dir / f"{pid}_mask.npy"
+            mask_path = self.mask_dir / f"{pid}_mask.npy"
             if not mask_path.exists():
-                print(f"  [SKIP] No mask found for patient {pid}")
+                print(f"  [SKIP] No mask for {pid}")
                 continue
 
-            # Load DICOM
-            series_dir  = series_dirs[0]
-            dicom_files = sorted(
-                series_dir.rglob("*.dcm"),
-                key=lambda f: float(pydicom.dcmread(f).ImagePositionPatient[2])
-            )
-            slices = [pydicom.dcmread(f) for f in dicom_files]
+            self.patient_series_dirs[pid] = series_dirs[0]
 
-            # Spacing 
-            pixel_spacing   = tuple(map(float, slices[0].PixelSpacing))
-            slice_thickness = float(slices[0].SliceThickness)
-            spacing = np.array([
-                slice_thickness,
-                pixel_spacing[0],
-                pixel_spacing[1]
-            ])
-
-            # Preprocess 
-            volume      = convert_to_hu(slices)
             mask_volume = np.load(mask_path)
 
-            #  resample_volume for CT, resample_mask for mask
-            volume      = resample_volume(volume, spacing)
-            mask_volume = resample_mask(mask_volume,spacing)
-
-            #  Alignment check
-            verify_image_mask_alignment(volume, mask_volume)
-
-            #  Window + normalize entire volume ONCE
-            volume = window_and_normalize(volume)
-
-            self.patient_volumes[pid] = volume
-            self.patient_masks[pid]   = mask_volume.astype(np.uint8)
-
-            # Precompute bboxes ONCE per slice 
-            # Not recomputed every __getitem__ call
-            self.patient_bboxes[pid] = {}
-            for z in range(volume.shape[0]):
-                self.patient_bboxes[pid][z] = get_lung_bbox(volume[z])
-
-            # ── Build sample lists ────────────────────────────
             tumor_indices = get_tumor_slices(
                 mask_volume,
-                min_tumor_pixels=min_tumor_pixels   # filter noise
+                min_tumor_pixels=min_tumor_pixels
             )
             non_tumor_indices = [
                 z for z in range(mask_volume.shape[0])
@@ -119,21 +76,21 @@ class LungSegmentationDataset(Dataset):
 
             for z in tumor_indices:
                 self.tumor_samples.append((pid, z))
-
             for z in non_tumor_indices:
                 self.bg_samples.append((pid, z))
 
-        # Build balanced sample list 
+            print(f"  {pid} — "
+                f"tumor: {len(tumor_indices)} | "
+                f"bg: {len(non_tumor_indices)}")
+
+            del mask_volume
+
         self.samples = self._build_samples()
 
-        # Stats
-        tumor_count = sum(
-            1 for pid, z in self.samples
-            if self.patient_masks[pid][z].sum() > 0
-        )
-        print(f"Total samples   : {len(self.samples)}")
-        print(f"Tumor slices    : {tumor_count}")
-        print(f"Background slices: {len(self.samples) - tumor_count}")
+       
+        print(f"\nTotal samples    : {len(self.samples)}")
+        print(f"Tumor samples    : {len(self.tumor_samples)}")
+        print(f"Background samples: {len(self.bg_samples)}")
 
     def _build_samples(self):
 
@@ -155,52 +112,58 @@ class LungSegmentationDataset(Dataset):
     def __getitem__(self, idx):
         pid, z = self.samples[idx]
 
-        volume      = self.patient_volumes[pid]
-        mask_volume = self.patient_masks[pid]
-        total_z     = volume.shape[0]
+        cache_dir = Path("data/cache")
+        pid_dir   = cache_dir / pid
+        bbox_path = cache_dir / f"{pid}_bboxes.npy"
+        mask_path = self.mask_dir / f"{pid}_mask.npy"
 
-        # 3-slice context 
+        bboxes  = np.load(bbox_path)
+        total_z = len(bboxes)
+
+        z        = min(z, total_z - 1)
         prev_idx = max(0, z - 1)
         next_idx = min(total_z - 1, z + 1)
 
-        prev_slice = volume[prev_idx]
-        curr_slice = volume[z]
-        next_slice = volume[next_idx]
+        prev_slice = np.load(pid_dir / f"{prev_idx:04d}.npy")
+        curr_slice = np.load(pid_dir / f"{z:04d}.npy")
+        next_slice = np.load(pid_dir / f"{next_idx:04d}.npy")
 
-        # Shape: (3, H, W)
+        mask_volume = np.load(mask_path)
+        mask        = mask_volume[z].copy().astype(np.float32)
+        del mask_volume
+
+        y_min, y_max, x_min, x_max = bboxes[z]
+        del bboxes
+
         image = np.stack(
             [prev_slice, curr_slice, next_slice],
             axis=0
         ).astype(np.float32)
 
-        mask = mask_volume[z].astype(np.float32)  # (H, W)
+   
+        image = image[:, y_min:y_max, x_min:x_max]
+        mask  = mask[y_min:y_max, x_min:x_max]
 
-        # Lung crop
-        # Uses precomputed bbox — not recomputed here
-        y_min, y_max, x_min, x_max = self.patient_bboxes[pid][z]
-        image = image[:, y_min:y_max, x_min:x_max]  # (3, H, W)
-        mask  = mask[y_min:y_max, x_min:x_max]       # (H, W)
-
-        # Resize
         resized = []
         for c in range(3):
             resized.append(resize_image(image[c], self.img_size))
-        image = np.stack(resized, axis=0)             # (3, H, W)
-        mask  = resize_mask(mask, self.img_size)       # (H, W)
+        image = np.stack(resized, axis=0)
+        mask  = resize_mask(mask, self.img_size)
 
-        # Binary mask 
+  
         mask = (mask > 0).astype(np.float32)
 
-        # Augmentation 
-        #  All ops on numpy before tensor conversion
-        #  Same transform applied to image AND mask
         if self.augment:
             image, mask = self._augment(image, mask)
 
-        image = torch.tensor(image, dtype=torch.float32)       # (3,H,W)
-        mask  = torch.tensor(mask,  dtype=torch.float32).unsqueeze(0)  # (1,H,W)
+      
+        image = torch.tensor(image, dtype=torch.float32)
+        mask  = torch.tensor(
+            mask, dtype=torch.float32
+        ).unsqueeze(0)
 
         return image, mask
+
 
     def _augment(self, image, mask):
         """

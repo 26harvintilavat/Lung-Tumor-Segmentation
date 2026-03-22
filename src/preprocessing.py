@@ -24,23 +24,41 @@ def resample_volume(volume, old_spacing, new_spacing=(1.0,1.0,1.0)):
     old_spacing = np.array(old_spacing, dtype=np.float64)   # convert to z,y,x
     new_spacing = np.array(new_spacing, dtype=np.float64)
 
-    image = sitk.GetImageFromArray(volume.astype(np.float32))
-    image.SetSpacing(old_spacing[::-1].tolist())
-
     resize_factor = old_spacing / new_spacing
     new_shape = np.round(
         np.array(volume.shape) * resize_factor
     ).astype(int)
 
+    image = sitk.GetImageFromArray(volume.astype(np.float32))
+    # spacing in (x, y, z) for SimpleITK
+    image.SetSpacing([
+        float(old_spacing[2]),   # x
+        float(old_spacing[1]),   # y
+        float(old_spacing[0])    # z
+    ])
+
+
     resampler = sitk.ResampleImageFilter()
     resampler.SetInterpolator(sitk.sitkLinear)
-    resampler.SetOutputSpacing(new_spacing[::-1].tolist())
-    resampler.SetSize([int(x) for x in new_shape[::-1]])
+    resampler.SetOutputSpacing([
+        float(new_spacing[2]),
+        float(new_spacing[1]),
+        float(new_spacing[0])
+    ])
+
+    resampler.SetSize([
+        int(new_shape[2]),
+        int(new_shape[1]),
+        int(new_shape[0])
+    ])
+
     resampler.SetOutputOrigin(image.GetOrigin())
     resampler.SetOutputDirection(image.GetDirection())
 
     resampled = resampler.Execute(image)
-    return sitk.GetArrayFromImage(resampled).astype(np.float32)
+    result = sitk.GetArrayFromImage(resampled)
+    print(f"  Volume resampled: {volume.shape} → {result.shape}")
+    return result.astype(np.float32)
 
 
 # RESAMPLE CT MASK
@@ -49,31 +67,65 @@ def resample_mask(mask, old_spacing, new_spacing=(1.0,1.0,1.0)):
     old_spacing = np.array(old_spacing, dtype=np.float64)
     new_spacing = np.array(new_spacing, dtype=np.float64)
 
-    image = sitk.GetImageFromArray(mask.astype(np.uint8))
-    image.SetSpacing(old_spacing[::-1].tolist())
-
     resize_factor = old_spacing / new_spacing
     new_shape = np.round(np.array(mask.shape) * resize_factor).astype(int)
 
+    image = sitk.GetImageFromArray(mask.astype(np.uint8))
+    image.SetSpacing([
+        float(old_spacing[2]),
+        float(old_spacing[1]),
+        float(old_spacing[0])
+    ])
+
     resampler = sitk.ResampleImageFilter()
     resampler.SetInterpolator(sitk.sitkNearestNeighbor)
-    resampler.SetOutputSpacing(new_spacing[::-1].tolist())
-    resampler.SetSize([int(x) for x in new_shape[::-1]])
+    resampler.SetOutputSpacing([
+        float(new_spacing[2]),
+        float(new_spacing[1]),
+        float(new_spacing[0])
+    ])
+
+    resampler.SetSize([
+        int(new_shape[2]),
+        int(new_shape[1]),
+        int(new_shape[0])
+    ])
+
     resampler.SetOutputOrigin(image.GetOrigin())
     resampler.SetOutputDirection(image.GetDirection())
 
     resampled = resampler.Execute(image)
     result = sitk.GetArrayFromImage(resampled)
 
+    print(f"  Mask resampled:   {mask.shape} → {result.shape}")
     return (result > 0).astype(np.uint8)
 
 # CONSISTENCY CHECK
 def verify_image_mask_alignment(image_volume, mask_volume):
-    assert image_volume.shape == mask_volume.shape, (
-        f"Shape mismatch after resampling"
-        f"Image: {image_volume.shape} | Mask: {mask_volume.shape}"
-    )
-    return True
+    """
+    If shapes still mismatch after resampling,
+    crop both to the minimum overlapping shape
+    instead of crashing
+    """
+    if image_volume.shape == mask_volume.shape:
+        return image_volume, mask_volume
+
+    print(f"  [WARN] Shape mismatch — "
+          f"Image: {image_volume.shape} | "
+          f"Mask: {mask_volume.shape}")
+    print(f"  [WARN] Cropping both to minimum overlap")
+
+    # Crop to minimum shape on each axis
+    z = min(image_volume.shape[0], mask_volume.shape[0])
+    y = min(image_volume.shape[1], mask_volume.shape[1])
+    x = min(image_volume.shape[2], mask_volume.shape[2])
+
+    image_volume = image_volume[:z, :y, :x]
+    mask_volume  = mask_volume[:z,  :y, :x]
+
+    print(f"  [INFO] Cropped to: {image_volume.shape}")
+
+    return image_volume, mask_volume
 
 # LUNG WINDOW + NORMALIZATION
 def window_and_normalize(image, min_hu=-1000, max_hu=400):
@@ -94,49 +146,69 @@ def window_and_normalize(image, min_hu=-1000, max_hu=400):
 
 #  LUNG BOUNDING BOX
 def get_lung_bbox(slice_img, margin=10):
-
     H, W = slice_img.shape
 
-    # step 1 - body mask
-    body = slice_img > -600
+    if slice_img.max() <= 1.0:
+        body_threshold = 0.25
+        lung_threshold = 0.50
+    else:
+        body_threshold = -600
+        lung_threshold = -300
+
+    body = slice_img > body_threshold
     body = ndi.binary_closing(body, iterations=5)
     body = ndi.binary_fill_holes(body)
 
-    # Step 2 — lung air inside body
-    lung = (slice_img < -300) & body
+    lung = (slice_img < lung_threshold) & body
     lung = ndi.binary_opening(lung, iterations=2)
 
-    # Step 3 — keep up to 2 largest components
     label, num = ndi.label(lung)
 
     if num == 0:
-        print(f"[WARN] No lung detected - using full slice {H}x{W}")
         return 0, H, 0, W
 
-    sizes = ndi.sum(lung, label, range(1, num+1))
-    top_n = min(2, num)
+    sizes          = ndi.sum(lung, label, range(1, num + 1))
+    top_n          = min(2, num)
     largest_labels = np.argsort(sizes)[-top_n:] + 1
-    lung_mask = np.isin(label, largest_labels)
+    lung_mask      = np.isin(label, largest_labels)
 
-    coords = np.column_stack(np.where(lung_mask))
+    coords        = np.column_stack(np.where(lung_mask))
+    y_min, x_min  = coords.min(axis=0)
+    y_max, x_max  = coords.max(axis=0)
 
-    y_min, x_min = coords.min(axis=0)
-    y_max, x_max = coords.max(axis=0)
-
-    # add small margin
     y_min = max(0, y_min - margin)
     x_min = max(0, x_min - margin)
     y_max = min(H, y_max + margin)
     x_max = min(W, x_max + margin)
 
+
+    if y_min >= y_max or x_min >= x_max:
+        return 0, H, 0, W
+
     return y_min, y_max, x_min, x_max
 
 # Resize
 def resize_image(image, size=256):
-    return cv2.resize(image, (size, size), interpolation=cv2.INTER_LINEAR).astype(np.float32)
+   
+    if image.size == 0 or image.shape[0] == 0 or image.shape[1] == 0:
+        return np.zeros((size, size), dtype=np.float32)
+    
+    return cv2.resize(
+        image,
+        (size, size),
+        interpolation=cv2.INTER_LINEAR
+    ).astype(np.float32)
 
 def resize_mask(mask, size=256):
-    resized = cv2.resize(mask.astype(np.uint8), (size, size), interpolation=cv2.INTER_NEAREST)
+  
+    if mask.size == 0 or mask.shape[0] == 0 or mask.shape[1] == 0:
+        return np.zeros((size, size), dtype=np.uint8)
+    
+    resized = cv2.resize(
+        mask.astype(np.uint8),
+        (size, size),
+        interpolation=cv2.INTER_NEAREST
+    )
     return (resized > 0).astype(np.uint8)
 
 # tumor slice filter

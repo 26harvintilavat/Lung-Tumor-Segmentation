@@ -4,21 +4,25 @@ from pathlib import Path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
+import os
 import torch
-import torch.nn as nn
+import numpy as np
+import matplotlib.pyplot as plt
 from torch.optim import Adam
 from torch.utils.data import DataLoader
 from torch.amp import autocast, GradScaler
-
-from configs.config import RAW_DATA_DIR, MASK_DIR, BATCH_SIZE, LR, EPOCHS, VAL_SPLIT, SEED
-from src.train_dataset import LungSegmentationDataset
-from src.model import LungAttentionUNet
-from scripts.prepare_dataloaders import get_patient_ids, split_patients
-from src.losses import TverskyFocalLoss, dice_score
 from torch.optim.lr_scheduler import LinearLR, CosineAnnealingLR, SequentialLR
 from tqdm import tqdm
-import matplotlib.pyplot as plt
-import os
+from sklearn.model_selection import train_test_split
+
+from configs.config import (
+    RAW_DATA_DIR, MASK_DIR,
+    BATCH_SIZE, LR, EPOCHS,
+    VAL_SPLIT, SEED, IMG_SIZE
+)
+from src.train_dataset import LungSegmentationDataset
+from src.model import LungAttentionUNet
+from src.losses import TverskyFocalLoss, dice_score
 
 # Train one epoch
 def train_one_epoch(model, loader, optimizer, criterion, device, scaler):
@@ -112,19 +116,47 @@ def main():
     scaler = GradScaler()
 
     # Patients
-    patient_ids = get_patient_ids(MASK_DIR)
-    train_ids, val_ids = split_patients(patient_ids, VAL_SPLIT, SEED)
+    mask_dir    = Path(MASK_DIR)
+    patient_ids = [
+    f.stem.replace('_mask', '')
+    for f in mask_dir.glob('*_mask.npy')
+]
+
+    train_ids, val_ids = train_test_split(
+        patient_ids,
+        test_size=VAL_SPLIT,
+        random_state=SEED
+)
+
+    print(f"Total patients : {len(patient_ids)}")
+    print(f"Train patients : {len(train_ids)}")
+    print(f"Val patients   : {len(val_ids)}")
 
     print("Train patients:", train_ids)
     print("Val patients:", val_ids)
 
     # Datasets 
     print("Creating train dataset...")
-    train_dataset = LungSegmentationDataset(RAW_DATA_DIR, MASK_DIR, train_ids)
+    train_dataset = LungSegmentationDataset(
+        RAW_DATA_DIR, 
+        MASK_DIR, 
+        train_ids,
+        img_size=IMG_SIZE,
+        augment=True,
+        min_tumor_pixels=10,
+        bg_ratio=2
+        )
     print("Train dataset created")
 
     print("Creating val dataset...")
-    val_dataset = LungSegmentationDataset(RAW_DATA_DIR, MASK_DIR, val_ids)
+    val_dataset = LungSegmentationDataset(
+        RAW_DATA_DIR, 
+        MASK_DIR, 
+        val_ids,
+        img_size=IMG_SIZE,
+        augment=False,
+        min_tumor_pixels=10,
+        bg_ratio=2)
     print("Val dataset created")
 
     print("Train samples:", len(train_dataset))
@@ -136,18 +168,18 @@ def main():
         train_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=True,
-        num_workers= num_workers,
+        num_workers= 0,
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=False
         )
     
     val_loader = DataLoader(
         val_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=False,
-        num_workers=num_workers,
+        num_workers=0,
         pin_memory=True,
-        persistent_workers=True
+        persistent_workers=False
         )
 
     print("Train batches:", len(train_loader))
