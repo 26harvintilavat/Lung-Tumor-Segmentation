@@ -91,20 +91,6 @@
 #             if isinstance(m, nn.Conv2d) or isinstance(m, nn.ConvTranspose2d):
 #                 nn.init.kaiming_normal_(m.weight)
     
-# Test function    
-def test():
-    x = torch.randn((2, 3, 512, 512))
-    model = LungAttentionUNet(in_channels=3, out_channels=1)
-    preds = model(x)
-    print("Input shape:", x.shape)
-    print("Output shape:", preds.shape)
-    assert preds.shape[2:] == x.shape[2:]
-    assert preds.shape[1] == 1
-
-
-# if __name__=="__main__":
-#     test()
-
 import torch
 import torch.nn as nn
 from monai.networks.nets import AttentionUnet
