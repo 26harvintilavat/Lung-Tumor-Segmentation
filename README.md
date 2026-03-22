@@ -1,198 +1,292 @@
-# 🫁 Lung Tumor Segmentation (End-to-End)
+# 🫁 Lung Tumor Segmentation
 
-## 🚀 Project Status: E2E Pipeline Integrated
+Automated lung tumor segmentation from CT scans using
+Attention U-Net deep learning architecture, trained on
+the LIDC-IDRI dataset.
 
-> **This project has successfully integrated its full end-to-end medical image segmentation pipeline.**
-> It now features a powerful FastAPI backend for DICOM ingestion and inference alongside a decoupled Vanilla JS Single Page Application (SPA) frontend for rendering medical CT slices and tracking pipeline progress.
-
----
-
-## 📌 Overview
-
-This repository aims to build an **end-to-end lung tumor segmentation pipeline** using **CT scans from The Cancer Imaging Archive (TCIA)**. The project covers the complete workflow starting from **data ingestion** to **model training and evaluation** using deep learning.
-
-The focus is on building a **clean, modular, and reproducible pipeline**, similar to what is expected in real-world medical imaging research and machine learning engineering.
+![Python](https://img.shields.io/badge/Python-3.10-blue)
+![PyTorch](https://img.shields.io/badge/PyTorch-2.0-orange)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100-green)
+![Val Dice](https://img.shields.io/badge/Val%20Dice-0.7545-brightgreen)
 
 ---
 
-## 🧠 Pipeline Overview
+## 📋 Table of Contents
 
-The dataset processing pipeline is fully automated and consists of the following steps:
-
-1. **XML Parsing**
-   - LIDC XML annotation files are parsed
-   - Patient ID and SeriesInstanceUID are extracted
-   - Slice-level contours and metadata are stored in JSON format
-
-2. **Annotation Serialization**
-   - XML annotations are converted into structured JSON files
-   - Each JSON file contains:
-     - patient ID
-     - annotated CT series UID
-     - nodule-wise slice contours
-
-3. **CT Series Resolution**
-   - The pipeline checks whether the annotated CT series exists locally
-   - Missing CT series are automatically downloaded from TCIA
-
-4. **Mask Generation**
-   - Polygon contours are rasterized into binary masks
-   - Slice alignment is done using SOPInstanceUID
-   - Final output is a 3D tumor mask per patient
-
-This design ensures correctness, reproducibility, and scalability across multiple patients.
-
-
-## 🎯 Project Goals
-
-* Download and manage lung CT datasets from TCIA
-* Perform preprocessing on CT scan data
-* Build a deep learning model for lung tumor segmentation
-* Evaluate model performance using appropriate metrics
-* Extend to inference APIs and deployment
+- [Overview](#overview)
+- [Architecture](#architecture)
+- [Dataset](#dataset)
+- [Results](#results)
+- [Project Structure](#project-structure)
+- [Installation](#installation)
+- [Usage](#usage)
+- [API](#api)
 
 ---
 
-## 🧩 Current Progress
+## 🔍 Overview
 
-✅ TCIA CT series downloader  
-✅ LIDC XML annotation parsing  
-✅ Structured JSON annotation format  
-✅ Automatic CT series resolution  
-✅ Tumor mask generation (3D)  
-✅ CT + mask visualization and validation  
-✅ Vanilla JS SPA Frontend Medical Dashboard  
-✅ FastAPI Processing Backend (Async Pipelines)  
+This project implements an end-to-end pipeline for
+lung tumor segmentation from CT scans:
 
-🚧 Dataset class for training  
-🚧 Model architecture (U-Net / variants)  
-🚧 Training pipeline  
-🚧 Evaluation metrics  
-🚧 Inference and deployment
+- **Input**: Raw DICOM CT scan files
+- **Output**: Binary tumor segmentation masks
+- **Model**: Attention U-Net with 3-slice context window
+- **API**: FastAPI REST endpoint for inference
+- **Performance**: Val Dice Score of 0.7545
 
 ---
 
-## 📂 Project Structure
+## 🧠 Architecture
+
+### Attention U-Net
+
+- **Input channels**: 3 (previous + current + next slice)
+- **Output channels**: 1 (binary tumor mask)
+- **Input size**: 256 × 256
+- **Key features**:
+  - Attention gates for focusing on tumor regions
+  - Skip connections for preserving spatial information
+  - 3-slice context window for 3D awareness
+
+### Loss Function
+
+- **TverskyFocal Loss**
+  - Tversky loss (α=0.3, β=0.7) for class imbalance
+  - Focal loss (γ=2.0) for hard examples
+  - Combined weight: 70% Tversky + 30% Focal
+
+---
+
+## 📦 Dataset
+
+**LIDC-IDRI** (Lung Image Database Consortium)
+
+- 150+ patients
+- Raw DICOM CT scans
+- JSON annotations converted to binary masks
+- Patient-level train/val split (75/25)
+
+### Preprocessing Pipeline
+
+1. HU conversion from raw DICOM
+2. Isotropic resampling to 1mm spacing
+3. Lung window clipping (-1000 to 400 HU)
+4. Z-score normalization → rescaled to [0,1]
+5. Lung bounding box cropping
+6. Resize to 256×256
+
+---
+
+## 📊 Results
+
+| Metric           | Value           |
+| ---------------- | --------------- |
+| Val Dice Score   | **0.7545**      |
+| Train Dice Score | **0.7865**      |
+| Val Loss         | **0.1682**      |
+| Best Epoch       | **38/50**       |
+| Architecture     | Attention U-Net |
+| Dataset          | LIDC-IDRI       |
+
+### Training Details
+
+| Parameter      | Value                    |
+| -------------- | ------------------------ |
+| Batch Size     | 2                        |
+| Learning Rate  | 3e-4                     |
+| Scheduler      | Warmup + CosineAnnealing |
+| Optimizer      | Adam                     |
+| Epochs         | 50                       |
+| Early Stopping | Patience 15              |
+| Image Size     | 256×256                  |
+| GPU            | NVIDIA RTX 3050 4GB      |
+
+---
+
+## 📁 Project Structure
 
 ```
-lung-tumor-segmentation/
+Lung-Tumor-Segmentation/
+│
+├── api/
+│   └── main.py              ← FastAPI endpoint
 │
 ├── configs/
-│ └── config.py # Centralized configuration
+│   └── config.py            ← Training configuration
 │
 ├── data/
-│   ├── raw/                # Downloaded CT series (DICOM)
-│   ├── annotations/        # XML + parsed JSON annotations
-│   ├── masks/              # Generated 3D tumor masks (.npy)
-│
-├── notebooks/
-│ ├── archive/ # Old dataset experiments
-│ └── 02_lidc_notebook.ipynb # LIDC data exploration
+│   ├── raw/                 ← DICOM files (not tracked)
+│   ├── masks/               ← Generated masks (not tracked)
+│   ├── cache/               ← Preprocessed cache (not tracked)
+│   └── annotations/         ← JSON annotations
 │
 ├── scripts/
-│ └── lidc_downloader.py         # TCIA downloader for LIDC-IDRI
-│ ├── parse_lidc_annotations.py   # XML → JSON
-│ ├── json_to_mask.py             # JSON → mask (auto-download CT)
-|
-├── src/
-│ ├── preprocessing.py # HU conversion & windowing
-│ └── dataset.py # CT dataset abstraction
+│   ├── train.py             ← Training script
+│   ├── prepare_dataloaders.py ← Cache preprocessing
+│   ├── json_to_mask.py      ← Mask generation
+│   └── evaluate.py          ← Model evaluation
 │
+├── src/
+│   ├── model.py             ← Attention U-Net
+│   ├── losses.py            ← TverskyFocal Loss
+│   ├── preprocessing.py     ← CT preprocessing
+│   ├── dataset.py           ← Base dataset
+│   └── train_dataset.py     ← Training dataset
+│
+├── checkpoints/             ← Saved models (not tracked)
+├── test_viewer.html         ← Web UI for visualization
 ├── requirements.txt
-├── .gitignore
 └── README.md
 ```
 
 ---
 
-## 📊 Dataset
+## ⚙️ Installation
 
-This project uses the **LIDC-IDRI (Lung Image Database Consortium Image Collection)** dataset from  
-**The Cancer Imaging Archive (TCIA)**.
+### 1. Clone Repository
 
-### Dataset Details
-- **Modality:** CT
-- **Format:** DICOM
-- **Annotations:** XML (LIDC radiologist annotations)
-- **Task:** Lung nodule (tumor) segmentation
-- **Granularity:** Slice-level polygon annotations
+```bash
+git clone https://github.com/yourusername/Lung-Tumor-Segmentation.git
+cd Lung-Tumor-Segmentation
+```
 
-## ⚠️ Dataset Caveats
+### 2. Create Virtual Environment
 
-- LIDC-IDRI annotations are provided by multiple radiologists
-- Nodules may be very small and sparsely distributed
-- Most CT slices do not contain tumors
-- Class imbalance is significant and handled in later stages
+```bash
+python -m venv venv
 
-### Important Notes
-- Each patient may contain **multiple CT series**
-- LIDC XML annotations correspond to **one specific SeriesInstanceUID**
-- This pipeline automatically aligns annotations with the correct CT series
-- Tumor nodules are often **very small (3–6 mm)** and appear in only a few slices
+# Windows
+venv\Scripts\activate
 
+# Linux/Mac
+source venv/bin/activate
+```
 
----
+### 3. Install Dependencies
 
-## ▶️ How to Run
-
-1. **Install Dependencies:**
-   Ensure you have Python 3.8+ installed.
-   ```bash
-   pip3 install -r requirements.txt
-   ```
-
-2. **Start the FastAPI Backend:**
-   From the root directory, launch the API server on port 8000.
-   ```bash
-   uvicorn api.main:app --reload --port 8000
-   ```
-
-3. **Start the Frontend UI:**
-   Open a new terminal window, navigate to the `frontend` directory, and start a local HTTP server on port 3000.
-   ```bash
-   cd frontend
-   python3 -m http.server 3000
-   ```
-
-4. **Access the Application:**
-   Open your browser and navigate to `http://localhost:3000`. You can upload DICOM files, view them in the dashboard, and trigger the analysis pipeline.
+```bash
+pip install -r requirements.txt
+```
 
 ---
 
-## 🛠 Technologies Used
+## 🚀 Usage
 
-* **Backend**: Python 3, FastAPI, Uvicorn, Pydicom, NumPy, SciPy, Pillow, TCIA Utils
-* **Frontend**: Vanilla HTML/CSS/JavaScript, Cornerstone.js (DICOM Rendering), HTML5 Canvas
-* **Machine Learning**: PyTorch (planned core integration)
+### Step 1 — Convert XML Annotations to JSON
+
+```bash
+python scripts/parse_lidc_annotation.py
+```
+
+### Step 2 — Generate Masks from JSON
+
+```bash
+python scripts/json_to_mask.py
+```
+
+### Step 3 — Cache Preprocessed Data
+
+```bash
+python scripts/prepare_dataloaders.py
+```
+
+### Step 4 — Train Model
+
+```bash
+python scripts/train.py
+```
+
+### Step 5 — Evaluate Model
+
+```bash
+python scripts/evaluate.py
+```
+
+### Step 6 — Run API
+
+```bash
+python api/main.py
+```
+
+### Step 7 — Open Web UI
+
+```bash
+# New terminal
+python -m http.server 3000
+
+# Open browser
+http://localhost:3000/test_viewer.html
+```
 
 ---
 
-## 🧠 Learning Objectives
+## 🌐 API
 
-This project is also a **learning-focused implementation**, emphasizing:
+### Endpoints
 
-* Real-world dataset handling
-* Defensive programming for unstable APIs
-* Modular ML pipeline design
-* Medical image segmentation workflows
+| Method | Endpoint      | Description      |
+| ------ | ------------- | ---------------- |
+| GET    | `/health`     | API health check |
+| GET    | `/model-info` | Model details    |
+| POST   | `/predict`    | Run segmentation |
+
+### Example Request
+
+```bash
+curl -X POST http://localhost:8000/predict \
+  -F "file=@patient_dicoms.zip"
+```
+
+### Example Response
+
+```json
+{
+  "status": "success",
+  "total_slices": 280,
+  "tumor_slices": 13,
+  "tumor_slice_ids": [184, 185, 186, 187],
+  "total_tumor_volume": 4523.0,
+  "overlays": [
+    {
+      "slice_index": 184,
+      "image_base64": "...",
+      "tumor_pixels": 54
+    }
+  ]
+}
+```
+
+### Swagger UI
+
+```
+http://localhost:8000/docs
+```
 
 ---
 
-## 🚀 Roadmap (Upcoming)
+## 🔧 Configuration
 
-*
+Edit `configs/config.py`:
+
+```python
+EPOCHS          = 50
+BATCH_SIZE      = 2
+LR              = 3e-4
+VAL_SPLIT       = 0.25
+IMG_SIZE        = 256
+PATIENCE        = 15
+WARMUP_EPOCHS   = 5
+COSINE_EPOCHS   = 45
+```
 
 ---
 
-## ⚠️ Disclaimer
+## 📚 References
 
-This project is **under active development**. Code structure, APIs, and implementations may change as the pipeline evolves.
-
----
-
-## 🤝 Contributions
-
-Suggestions, issues, and discussions are welcome. Since this project is still evolving, feedback is highly appreciated.
+- LIDC-IDRI Dataset: [https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI](https://wiki.cancerimagingarchive.net/display/Public/LIDC-IDRI)
+- Attention U-Net: [Oktay et al., 2018](https://arxiv.org/abs/1804.03999)
+- Tversky Loss: [Salehi et al., 2017](https://arxiv.org/abs/1706.05721)
 
 ---
 
@@ -204,4 +298,3 @@ Suggestions, issues, and discussions are welcome. Since this project is still ev
 ---
 
 > ⭐ If you find this project interesting, consider starring the repository and following the progress!
-
