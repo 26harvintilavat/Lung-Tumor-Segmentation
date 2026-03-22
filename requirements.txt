@@ -1,4 +1,3 @@
-# Core requirements for LIDC-IDRI downloader with mask extraction
 tcia-utils
 pandas
 numpy
@@ -7,7 +6,6 @@ pylidc
 matplotlib
 nibabel
 torch
-tqdm
 uvicorn
 scipy
 pydicom
@@ -16,3 +14,5 @@ torch
 torchvision
 matplotlib
 tqdm
+fastapi
+python-multipart

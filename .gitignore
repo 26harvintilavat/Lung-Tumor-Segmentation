@@ -21,4 +21,5 @@ __pycache__/
 *.pyc
 
 data/cache
+test_patient.zip
 
