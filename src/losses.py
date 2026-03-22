@@ -48,8 +48,9 @@ class FocalLoss(nn.Module):
 
         probs = torch.sigmoid(logits)
         p_t = probs * targets + (1 - probs) * (1 - targets)
+        alpha_t = self.alpha * targets + (1 - self.alpha) * (1 - targets)
 
-        focal_weight = self.alpha * (1 - p_t) ** self.gamma
+        focal_weight = alpha_t * (1 - p_t) ** self.gamma
 
         loss = focal_weight * bce
         return loss.mean()
@@ -84,7 +85,7 @@ class TverskyFocalLoss(nn.Module):
         loss = (self.tversky_weight * t_loss + (1 - self.tversky_weight) * f_loss)
         return loss
     
-def dice_score(logits, targets, thresold = 0.5):
+def dice_score(logits, targets, threshold = 0.5):
     """
     Fixed version of your dice_score:
     - Handles empty masks properly
@@ -92,7 +93,7 @@ def dice_score(logits, targets, thresold = 0.5):
     """
 
     probs = torch.sigmoid(logits)
-    preds = (probs > thresold).float()
+    preds = (probs > threshold).float()
 
     dims = (1, 2, 3)
 

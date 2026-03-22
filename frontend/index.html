@@ -1,463 +1,1318 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LungSeg AI | Lung Tumor Segmentation</title>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>LungSeg AI — Lung Tumor Segmentation</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet" />
+  <style>
 
-    <!-- Fonts -->
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=DM+Mono:ital,wght@0,300;0,400;0,500;1,300;1,400;1,500&family=Syne:wght@400..800&display=swap"
-        rel="stylesheet">
+/* ─────────────────────────────────────────
+   TOKENS
+───────────────────────────────────────── */
+:root {
+  --bg:         #080a0d;
+  --bg2:        #0e1117;
+  --bg3:        #131720;
+  --surface:    #1a1f2b;
+  --border:     rgba(255,255,255,0.07);
+  --border-hi:  rgba(0,242,255,0.3);
+  --accent:     #00f2ff;
+  --accent-dim: rgba(0,242,255,0.1);
+  --accent-glow:rgba(0,242,255,0.22);
+  --text:       #e8eaf0;
+  --text2:      #8892a4;
+  --text3:      #4a5568;
+  --mono: 'Space Mono', monospace;
+  --sans: 'Inter', system-ui, sans-serif;
+  --r: 14px;
+}
 
-    <!-- Cornerstone Core -->
-    <script src="https://unpkg.com/cornerstone-core@2.6.1/dist/cornerstone.js"></script>
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
 
-    <!-- dicomParser -->
-    <script src="https://unpkg.com/dicom-parser@1.8.13/dist/dicomParser.js"></script>
+/* ─────────────────────────────────────────
+   NAV
+───────────────────────────────────────── */
+nav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 40px;
+  background: rgba(8,10,13,0.7);
+  backdrop-filter: blur(16px);
+  border-bottom: 1px solid var(--border);
+  z-index: 100;
+}
 
-    <!-- Cornerstone WADO Image Loader -->
-    <script src="https://unpkg.com/cornerstone-wado-image-loader@3.3.1/dist/cornerstoneWADOImageLoader.min.js"></script>
+.nav-logo {
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: -.3px;
+}
+.nav-logo span { color: var(--accent); }
 
-    <!-- App Styles -->
-    <link rel="stylesheet" href="style.css">
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 32px;
+  list-style: none;
+}
+.nav-links a {
+  font-size: 13px;
+  color: var(--text2);
+  text-decoration: none;
+  transition: color .2s;
+}
+.nav-links a:hover { color: var(--text); }
+
+.nav-cta {
+  font-size: 13px;
+  font-weight: 600;
+  padding: 8px 20px;
+  border-radius: 8px;
+  background: var(--accent);
+  color: #040608 !important;
+  text-decoration: none;
+  transition: box-shadow .2s, transform .15s;
+}
+.nav-cta:hover { box-shadow: 0 0 20px var(--accent-glow); transform: translateY(-1px); }
+
+/* ─────────────────────────────────────────
+   ANIMATED BACKGROUND CANVAS
+───────────────────────────────────────── */
+#bgCanvas {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: .55;
+}
+
+/* ─────────────────────────────────────────
+   HERO
+───────────────────────────────────────── */
+.hero {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 120px 32px 80px;
+  gap: 0;
+}
+
+.hero-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .2em;
+  color: var(--accent);
+  margin-bottom: 24px;
+  opacity: 0;
+  animation: fadeUp .6s .1s forwards;
+}
+
+.hero-title {
+  font-size: clamp(3rem, 8vw, 6.5rem);
+  font-weight: 800;
+  letter-spacing: -3px;
+  line-height: 1;
+  margin-bottom: 28px;
+  opacity: 0;
+  animation: fadeUp .7s .2s forwards;
+}
+.hero-title .accent { color: var(--accent); }
+.hero-title .dim    { color: var(--text2); font-weight: 300; }
+
+.hero-sub {
+  max-width: 580px;
+  font-size: 17px;
+  font-weight: 400;
+  color: var(--text2);
+  line-height: 1.7;
+  margin-bottom: 44px;
+  opacity: 0;
+  animation: fadeUp .7s .3s forwards;
+}
+
+.hero-actions {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  margin-bottom: 72px;
+  opacity: 0;
+  animation: fadeUp .7s .4s forwards;
+}
+
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  background: var(--accent);
+  color: #040608;
+  font-weight: 700;
+  font-size: 14px;
+  border-radius: var(--r);
+  text-decoration: none;
+  transition: box-shadow .2s, transform .15s;
+  position: relative;
+  overflow: hidden;
+}
+.btn-primary::after {
+  content: '';
+  position: absolute; inset: 0;
+  background: linear-gradient(90deg,transparent,rgba(255,255,255,.14),transparent);
+  transform: translateX(-100%);
+  transition: transform .4s;
+}
+.btn-primary:hover::after { transform: translateX(100%); }
+.btn-primary:hover { box-shadow: 0 0 28px var(--accent-glow); transform: translateY(-2px); }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 28px;
+  background: transparent;
+  color: var(--text2);
+  font-weight: 500;
+  font-size: 14px;
+  border-radius: var(--r);
+  border: 1px solid var(--border);
+  text-decoration: none;
+  transition: border-color .2s, color .2s;
+}
+.btn-ghost:hover { border-color: var(--border-hi); color: var(--text); }
+
+/* ── hero 3D visual ── */
+.hero-visual {
+  opacity: 0;
+  animation: fadeUp .8s .5s forwards;
+  position: relative;
+  width: min(700px, 90vw);
+}
+
+.model-card {
+  width: 100%;
+  background: var(--bg2);
+  border: 1px solid var(--border-hi);
+  border-radius: 20px;
+  overflow: hidden;
+  box-shadow: 0 0 60px rgba(0,242,255,0.06);
+}
+
+.model-card-bar {
+  height: 40px;
+  background: var(--bg3);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 16px;
+  gap: 8px;
+}
+.ct-dot { width: 10px; height: 10px; border-radius: 50%; }
+.ct-dot.r { background: #ff5f57; }
+.ct-dot.y { background: #febc2e; }
+.ct-dot.g { background: #28c840; }
+.model-card-title {
+  margin-left: auto;
+  margin-right: auto;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: .1em;
+}
+
+.model-card iframe {
+  display: block;
+  width: 100%;
+  height: 420px;
+  border: none;
+  background: #000;
+}
+
+.model-card-footer {
+  height: 44px;
+  background: var(--bg3);
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 20px;
+}
+.ct-stat {
+  display: flex;
+  gap: 8px;
+  align-items: baseline;
+}
+.ct-stat-label { font-family: var(--mono); font-size: 9px; color: var(--text3); letter-spacing: .1em; }
+.ct-stat-val   { font-family: var(--mono); font-size: 12px; color: var(--accent); font-weight: 700; }
+
+/* ─────────────────────────────────────────
+   STATS BAND
+───────────────────────────────────────── */
+.stats-band {
+  position: relative; z-index: 1;
+  background: var(--bg2);
+  border-top: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  padding: 48px 40px;
+}
+.stats-band-inner {
+  max-width: 1000px;
+  margin: 0 auto;
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 32px;
+}
+.band-stat { text-align: center; }
+.band-num {
+  font-size: 2.6rem;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: -2px;
+  line-height: 1;
+  display: block;
+  margin-bottom: 6px;
+}
+.band-desc {
+  font-size: 12px;
+  color: var(--text2);
+  font-family: var(--mono);
+  letter-spacing: .04em;
+}
+
+/* ─────────────────────────────────────────
+   SECTIONS SHARED
+───────────────────────────────────────── */
+section {
+  position: relative;
+  z-index: 1;
+  padding: 100px 40px;
+  max-width: 1100px;
+  margin: 0 auto;
+}
+
+.section-eyebrow {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: .18em;
+  color: var(--accent);
+  margin-bottom: 16px;
+}
+.section-title {
+  font-size: clamp(1.8rem, 3.5vw, 2.8rem);
+  font-weight: 700;
+  letter-spacing: -1px;
+  margin-bottom: 16px;
+}
+.section-sub {
+  font-size: 16px;
+  color: var(--text2);
+  max-width: 520px;
+  line-height: 1.7;
+}
+
+/* ─────────────────────────────────────────
+   HOW IT WORKS
+───────────────────────────────────────── */
+.pipeline-grid {
+  display: grid;
+  grid-template-columns: repeat(4,1fr);
+  gap: 2px;
+  margin-top: 60px;
+  background: var(--border);
+  border-radius: 16px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+}
+
+.pipeline-step {
+  background: var(--bg2);
+  padding: 32px 24px;
+  position: relative;
+  transition: background .2s;
+}
+.pipeline-step:hover { background: var(--bg3); }
+
+.pipeline-num {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  margin-bottom: 20px;
+  letter-spacing: .06em;
+}
+
+.pipeline-icon {
+  width: 48px; height: 48px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+  color: var(--accent);
+  transition: box-shadow .2s, border-color .2s;
+}
+.pipeline-icon svg { width: 22px; height: 22px; }
+.pipeline-step:hover .pipeline-icon {
+  border-color: var(--border-hi);
+  box-shadow: 0 0 16px var(--accent-glow);
+}
+
+.pipeline-title { font-size: 14px; font-weight: 600; margin-bottom: 8px; }
+.pipeline-desc  { font-size: 13px; color: var(--text2); line-height: 1.6; }
+
+.pipeline-arrow {
+  position: absolute;
+  top: 50%; right: -12px;
+  transform: translateY(-50%);
+  font-size: 16px;
+  color: var(--accent);
+  z-index: 2;
+  display: none;
+}
+
+/* ─────────────────────────────────────────
+   ARCHITECTURE DEEP-DIVE
+───────────────────────────────────────── */
+.arch-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-top: 60px;
+}
+
+.arch-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 32px;
+  transition: border-color .2s, transform .2s;
+}
+.arch-card:hover {
+  border-color: var(--border-hi);
+  transform: translateY(-3px);
+}
+
+.arch-card-icon {
+  width: 44px; height: 44px;
+  border-radius: 12px;
+  background: var(--accent-dim);
+  border: 1px solid var(--border-hi);
+  display: flex; align-items: center; justify-content: center;
+  margin-bottom: 20px;
+  color: var(--accent);
+}
+.arch-card-icon svg { width: 20px; height: 20px; }
+
+.arch-card h3 { font-size: 15px; font-weight: 600; margin-bottom: 10px; }
+.arch-card p  { font-size: 13px; color: var(--text2); line-height: 1.7; }
+
+.arch-card .tag-row { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+.tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 20px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text2);
+}
+
+/* unet diagram */
+.unet-diagram {
+  grid-column: 1 / -1;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 36px 32px;
+}
+.unet-diagram h3 {
+  font-size: 13px; font-weight: 600;
+  margin-bottom: 28px;
+  color: var(--text2);
+  font-family: var(--mono);
+  letter-spacing: .06em;
+}
+
+.unet-viz {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: center;
+}
+
+.unet-row {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  justify-content: center;
+}
+
+.unet-block {
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .04em;
+  transition: transform .15s;
+  cursor: default;
+  white-space: nowrap;
+  padding: 0 12px;
+}
+.unet-block:hover { transform: scale(1.04); }
+
+.ub-enc  { background: rgba(0,242,255,.1);  border: 1px solid rgba(0,242,255,.25); color: var(--accent); }
+.ub-bot  { background: rgba(0,242,255,.2);  border: 1px solid rgba(0,242,255,.5);  color: var(--accent); }
+.ub-dec  { background: rgba(100,200,255,.08); border: 1px solid rgba(100,200,255,.2); color: #6fc8ff; }
+.ub-att  { background: rgba(255,200,0,.08); border: 1px solid rgba(255,200,0,.25);  color: #ffc800; }
+.ub-skip { background: transparent; border: 1px dashed var(--text3); color: var(--text3); font-size: 8px; }
+.ub-out  { background: rgba(0,232,122,.1);  border: 1px solid rgba(0,232,122,.3);  color: #00e87a; }
+
+.unet-arrow { color: var(--text3); font-size: 14px; }
+
+/* ─────────────────────────────────────────
+   DATASET
+───────────────────────────────────────── */
+.dataset-layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 48px;
+  margin-top: 60px;
+  align-items: center;
+}
+
+.dataset-facts { display: flex; flex-direction: column; gap: 16px; }
+
+.fact-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 14px;
+  padding: 18px 20px;
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  transition: border-color .2s;
+}
+.fact-row:hover { border-color: var(--border-hi); }
+
+.fact-icon {
+  width: 36px; height: 36px;
+  border-radius: 10px;
+  background: var(--accent-dim);
+  border: 1px solid var(--border-hi);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+.fact-icon svg { width: 16px; height: 16px; }
+
+.fact-text h4 { font-size: 13px; font-weight: 600; margin-bottom: 3px; }
+.fact-text p  { font-size: 12px; color: var(--text2); line-height: 1.5; }
+
+/* loss visual */
+.loss-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 32px;
+}
+.loss-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 24px; color: var(--text2); font-family: var(--mono); letter-spacing:.06em; }
+
+.loss-bar-group { margin-bottom: 20px; }
+.loss-bar-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+.loss-bar-name  { font-size: 12px; color: var(--text); font-weight: 500; }
+.loss-bar-val   { font-size: 12px; font-family: var(--mono); color: var(--accent); }
+
+.loss-bar-bg {
+  height: 6px;
+  background: var(--surface);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.loss-bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, var(--accent), #0af);
+  transition: width 1.2s cubic-bezier(.22,1,.36,1);
+}
+.loss-bar-desc { margin-top: 6px; font-size: 11px; color: var(--text3); }
+
+/* ─────────────────────────────────────────
+   RESULTS / METRICS
+───────────────────────────────────────── */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 16px;
+  margin-top: 60px;
+}
+
+.metric-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 32px 24px;
+  text-align: center;
+  transition: border-color .2s, transform .2s;
+}
+.metric-card:hover { border-color: var(--border-hi); transform: translateY(-3px); }
+
+.metric-val {
+  font-size: 3rem;
+  font-weight: 800;
+  color: var(--accent);
+  letter-spacing: -2px;
+  line-height: 1;
+  margin-bottom: 8px;
+  display: block;
+}
+.metric-name { font-size: 13px; color: var(--text2); margin-bottom: 6px; }
+.metric-desc { font-size: 11px; color: var(--text3); font-family: var(--mono); }
+
+/* ─────────────────────────────────────────
+   TECH STACK
+───────────────────────────────────────── */
+.stack-grid {
+  display: grid;
+  grid-template-columns: repeat(3,1fr);
+  gap: 16px;
+  margin-top: 60px;
+}
+
+.stack-card {
+  background: var(--bg2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 24px;
+  transition: border-color .2s;
+}
+.stack-card:hover { border-color: var(--border-hi); }
+
+.stack-layer {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: .14em;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+.stack-card h3 { font-size: 14px; font-weight: 600; margin-bottom: 12px; }
+.stack-tags { display: flex; flex-wrap: wrap; gap: 6px; }
+.stack-tag {
+  font-family: var(--mono);
+  font-size: 10px;
+  padding: 3px 9px;
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text2);
+  border: 1px solid var(--border);
+}
+
+/* ─────────────────────────────────────────
+   CTA
+───────────────────────────────────────── */
+.cta-section {
+  position: relative; z-index: 1;
+  padding: 120px 40px;
+  text-align: center;
+  border-top: 1px solid var(--border);
+}
+
+.cta-glow {
+  position: absolute;
+  top: 0; left: 50%;
+  transform: translateX(-50%);
+  width: 600px; height: 300px;
+  background: radial-gradient(ellipse at top, rgba(0,242,255,.08), transparent 70%);
+  pointer-events: none;
+}
+
+.cta-section h2 {
+  font-size: clamp(2rem, 4vw, 3.2rem);
+  font-weight: 800;
+  letter-spacing: -1.5px;
+  margin-bottom: 16px;
+}
+.cta-section h2 span { color: var(--accent); }
+.cta-section p {
+  font-size: 16px;
+  color: var(--text2);
+  max-width: 460px;
+  margin: 0 auto 40px;
+}
+
+/* ─────────────────────────────────────────
+   FOOTER
+───────────────────────────────────────── */
+footer {
+  position: relative; z-index: 1;
+  border-top: 1px solid var(--border);
+  padding: 32px 40px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.footer-logo { font-weight: 700; font-size: 14px; }
+.footer-logo span { color: var(--accent); }
+.footer-note {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--text3);
+  letter-spacing: .06em;
+}
+
+/* ─────────────────────────────────────────
+   SCROLL-REVEAL
+───────────────────────────────────────── */
+.reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity .7s cubic-bezier(.22,1,.36,1), transform .7s cubic-bezier(.22,1,.36,1);
+}
+.reveal.visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* ─────────────────────────────────────────
+   UTILITIES
+───────────────────────────────────────── */
+@keyframes fadeUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@media (max-width: 860px) {
+  .pipeline-grid  { grid-template-columns: 1fr 1fr; }
+  .arch-grid      { grid-template-columns: 1fr; }
+  .dataset-layout { grid-template-columns: 1fr; }
+  .metrics-grid   { grid-template-columns: 1fr 1fr; }
+  .stack-grid     { grid-template-columns: 1fr 1fr; }
+  .stats-band-inner { grid-template-columns: repeat(2,1fr); }
+  nav { padding: 0 20px; }
+  .nav-links li:not(:last-child) { display: none; }
+}
+@media (max-width: 560px) {
+  .pipeline-grid { grid-template-columns: 1fr; }
+  .metrics-grid  { grid-template-columns: 1fr; }
+  .stack-grid    { grid-template-columns: 1fr; }
+  .hero-actions  { flex-direction: column; }
+  .ct-mockup-body { grid-template-columns: 1fr 1fr 1fr; }
+  footer { flex-direction: column; gap: 12px; text-align: center; }
+}
+
+  </style>
 </head>
-
 <body>
 
-    <!-- Backend Status Banner -->
-    <div id="backendBanner" class="backend-banner hidden">
-        Backend offline — start FastAPI server on port 8000
+<!-- ════════════════════════════════════════
+     NAV
+════════════════════════════════════════ -->
+<nav>
+  <div class="nav-logo">LungSeg <span>AI</span></div>
+  <ul class="nav-links">
+    <li><a href="#how">How it works</a></li>
+    <li><a href="#architecture">Architecture</a></li>
+    <li><a href="#dataset">Dataset</a></li>
+    <li><a href="#metrics">Results</a></li>
+    <li><a href="tool.html" class="nav-cta">Launch Tool →</a></li>
+  </ul>
+</nav>
+
+<!-- animated background -->
+<canvas id="bgCanvas"></canvas>
+
+<!-- ════════════════════════════════════════
+     HERO
+════════════════════════════════════════ -->
+<div class="hero">
+  <p class="hero-eyebrow">DEEP LEARNING · MEDICAL IMAGING · RESEARCH</p>
+
+  <h1 class="hero-title">
+    Automated<br>
+    <span class="accent">Lung Tumor</span><br>
+    <span class="dim">Segmentation</span>
+  </h1>
+
+  <p class="hero-sub">
+    An end-to-end deep learning pipeline that reads a CT scan and precisely delineates lung tumors using an Attention U-Net with 2.5D spatial context — slice by slice, nodule by nodule.
+  </p>
+
+  <div class="hero-actions">
+    <a href="tool.html" class="btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Try the Tool
+    </a>
+    <a href="https://github.com/26harvintilavat/Lung-Tumor-Segmentation" target="_blank" class="btn-ghost">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/></svg>
+      View on GitHub
+    </a>
+  </div>
+
+  <!-- 3D lung model -->
+  <div class="hero-visual">
+    <div class="model-card">
+      <div class="model-card-bar">
+        <div class="ct-dot r"></div>
+        <div class="ct-dot y"></div>
+        <div class="ct-dot g"></div>
+        <div class="model-card-title">3D LUNG MODEL · INTERACTIVE · DRAG TO ROTATE</div>
+      </div>
+      <iframe
+        title="Realistic Human Lungs"
+        src="https://sketchfab.com/models/ce09f4099a68467880f46e61eb9a3531/embed?autospin=0.3&autostart=1&ui_infos=0&ui_watermark=0&ui_controls=1&ui_stop=0&ui_theme=dark&transparent=1&preload=1"
+        allow="autoplay; fullscreen; xr-spatial-tracking"
+        allowfullscreen>
+      </iframe>
+      <div class="model-card-footer">
+        <div class="ct-stat"><span class="ct-stat-label">MODEL</span><span class="ct-stat-val">ATTN U-NET</span></div>
+        <div class="ct-stat"><span class="ct-stat-label">INPUT</span><span class="ct-stat-val">256×256×3</span></div>
+        <div class="ct-stat"><span class="ct-stat-label">CONTEXT</span><span class="ct-stat-val">2.5D</span></div>
+        <div class="ct-stat"><span class="ct-stat-label">DATASET</span><span class="ct-stat-val">LIDC-IDRI</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     STATS BAND
+════════════════════════════════════════ -->
+<div class="stats-band">
+  <div class="stats-band-inner reveal">
+    <div class="band-stat">
+      <span class="band-num" data-target="1010">0</span>
+      <span class="band-desc">LIDC-IDRI PATIENTS</span>
+    </div>
+    <div class="band-stat">
+      <span class="band-num" data-target="256">0</span>
+      <span class="band-desc">INPUT RESOLUTION (px)</span>
+    </div>
+    <div class="band-stat">
+      <span class="band-num" data-suffix="D">2.5</span>
+      <span class="band-desc">SPATIAL CONTEXT</span>
+    </div>
+    <div class="band-stat">
+      <span class="band-num" data-suffix=" layers">4</span>
+      <span class="band-desc">ENCODER DEPTH</span>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════
+     HOW IT WORKS
+════════════════════════════════════════ -->
+<section id="how">
+  <div class="reveal">
+    <p class="section-eyebrow">PIPELINE</p>
+    <h2 class="section-title">From raw DICOM to tumor mask<br>in four steps</h2>
+    <p class="section-sub">A fully automated end-to-end inference pipeline. Drop a ZIP of DICOM files and get segmented overlays back.</p>
+  </div>
+
+  <div class="pipeline-grid reveal">
+    <div class="pipeline-step">
+      <p class="pipeline-num">01</p>
+      <div class="pipeline-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+      </div>
+      <h3 class="pipeline-title">DICOM Ingestion</h3>
+      <p class="pipeline-desc">Raw CT slices are loaded via pydicom, sorted by ImagePositionPatient, and stacked into a 3D volume.</p>
+    </div>
+    <div class="pipeline-step">
+      <p class="pipeline-num">02</p>
+      <div class="pipeline-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+      </div>
+      <h3 class="pipeline-title">HU Preprocessing</h3>
+      <p class="pipeline-desc">Voxels are converted to Hounsfield Units, resampled to isotropic 1mm spacing, and windowed to the lung preset (−600/1500).</p>
+    </div>
+    <div class="pipeline-step">
+      <p class="pipeline-num">03</p>
+      <div class="pipeline-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      </div>
+      <h3 class="pipeline-title">Attention U-Net</h3>
+      <p class="pipeline-desc">Three consecutive slices (2.5D context) are fed into the Attention U-Net, which outputs a binary segmentation mask at 256×256 resolution.</p>
+    </div>
+    <div class="pipeline-step">
+      <p class="pipeline-num">04</p>
+      <div class="pipeline-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+      </div>
+      <h3 class="pipeline-title">Overlay & Metrics</h3>
+      <p class="pipeline-desc">Predicted masks are back-projected to original slice dimensions. Tumor regions are highlighted in red and returned as base64 PNG overlays.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════════════════════════
+     ARCHITECTURE
+════════════════════════════════════════ -->
+<section id="architecture" style="background: var(--bg2); max-width:100%; padding: 100px 40px;">
+<div style="max-width:1100px; margin: 0 auto;">
+  <div class="reveal">
+    <p class="section-eyebrow">ARCHITECTURE</p>
+    <h2 class="section-title">Attention U-Net with<br>2.5D spatial context</h2>
+    <p class="section-sub">Standard 2D models miss the 3D shape of tumors. We encode depth by stacking three adjacent slices as input channels — giving the network volumetric awareness without the memory cost of 3D convolutions.</p>
+  </div>
+
+  <div class="arch-grid reveal">
+
+    <div class="arch-card">
+      <div class="arch-card-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+      </div>
+      <h3>2.5D Input Strategy</h3>
+      <p>For each slice z, the model receives [z−1, z, z+1] stacked as a 3-channel tensor. This gives the encoder structural continuity — a vessel that disappears between slices is far less likely to be confused with a tumor nodule.</p>
+      <div class="tag-row">
+        <span class="tag">3 × 256 × 256 input</span>
+        <span class="tag">Adjacent context</span>
+        <span class="tag">Fewer false positives</span>
+      </div>
     </div>
 
-    <!-- Toast Container -->
-    <div id="toastContainer" class="toast-container"></div>
+    <div class="arch-card">
+      <div class="arch-card-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+      <h3>Attention Gates</h3>
+      <p>At every skip connection in the decoder, an attention gate learns to suppress activations from irrelevant regions (ribs, blood vessels, airways) and amplify features in suspicious nodule-shaped regions — directly from the loss gradient.</p>
+      <div class="tag-row">
+        <span class="tag">Soft attention</span>
+        <span class="tag">Skip connection gating</span>
+        <span class="tag">Focal suppression</span>
+      </div>
+    </div>
 
-    <!-- Navigation Bar -->
-    <nav id="navbar" class="navbar">
-        <div class="nav-brand">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                class="lucide lucide-lungs">
-                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
-                <path d="M12 6v12" />
-            </svg>
-            <span>LungSeg AI</span>
+    <div class="arch-card">
+      <div class="arch-card-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><line x1="12" y1="20" x2="12" y2="10"/><line x1="18" y1="20" x2="18" y2="4"/><line x1="6" y1="20" x2="6" y2="16"/></svg>
+      </div>
+      <h3>Hybrid Loss: Tversky + Focal</h3>
+      <p>Lung tumor voxels are vastly outnumbered by healthy tissue. Tversky loss controls the False Negative / False Positive trade-off. Focal loss down-weights easy background pixels and forces the model to focus on hard boundary pixels.</p>
+      <div class="tag-row">
+        <span class="tag">Class imbalance</span>
+        <span class="tag">α=0.3 β=0.7</span>
+        <span class="tag">γ=2 focal</span>
+      </div>
+    </div>
+
+    <div class="arch-card">
+      <div class="arch-card-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+      <h3>Lung ROI Cropping</h3>
+      <p>Before inference, each slice is automatically cropped to a tight bounding box around the lung region. This removes the irrelevant table, body wall, and bed from the input, reducing noise and cutting inference time by ~40%.</p>
+      <div class="tag-row">
+        <span class="tag">Auto lung bbox</span>
+        <span class="tag">Resize to 256px</span>
+        <span class="tag">Back-projected</span>
+      </div>
+    </div>
+
+    <!-- U-Net diagram -->
+    <div class="unet-diagram">
+      <h3>ENCODER — BOTTLENECK — DECODER STRUCTURE</h3>
+      <div class="unet-viz">
+        <div class="unet-row">
+          <div class="unet-block ub-enc" style="width:280px">Conv 64 → Conv 64</div>
+          <span class="unet-arrow">⟶ skip ⟶</span>
+          <div class="unet-block ub-dec" style="width:280px">UpConv + Conv 64</div>
         </div>
-        <ul class="nav-links">
-            <li><a href="#home" class="nav-link">Home</a></li>
-            <li><a href="#upload" class="nav-link">Upload</a></li>
-            <li><a href="#viewer" class="nav-link">Viewer</a></li>
-            <li><a href="#pipeline" class="nav-link">Pipeline</a></li>
-            <li><a href="#training" class="nav-link">Training</a></li>
-            <li><a href="#about" class="nav-link">About</a></li>
-        </ul>
-    </nav>
+        <div class="unet-row" style="gap:8px">
+          <span style="color:var(--text3);font-size:12px">↓ MaxPool</span>
+          <span style="flex:1"></span>
+          <span style="color:var(--text3);font-size:12px">↑ Upsample</span>
+        </div>
+        <div class="unet-row">
+          <div class="unet-block ub-enc" style="width:240px">Conv 128 → Conv 128</div>
+          <span class="unet-arrow"> skip + </span>
+          <div class="unet-block ub-att" style="width:80px">Attn Gate</div>
+          <span class="unet-arrow"> → </span>
+          <div class="unet-block ub-dec" style="width:180px">UpConv + Conv 128</div>
+        </div>
+        <div class="unet-row" style="gap:8px">
+          <span style="color:var(--text3);font-size:12px">↓ MaxPool</span>
+          <span style="flex:1"></span>
+          <span style="color:var(--text3);font-size:12px">↑ Upsample</span>
+        </div>
+        <div class="unet-row">
+          <div class="unet-block ub-enc" style="width:200px">Conv 256 → Conv 256</div>
+          <span class="unet-arrow"> skip + </span>
+          <div class="unet-block ub-att" style="width:80px">Attn Gate</div>
+          <span class="unet-arrow"> → </span>
+          <div class="unet-block ub-dec" style="width:160px">UpConv + Conv 256</div>
+        </div>
+        <div class="unet-row" style="gap:8px">
+          <span style="color:var(--text3);font-size:12px">↓ MaxPool</span>
+          <span style="flex:1"></span>
+          <span style="color:var(--text3);font-size:12px">↑ Upsample</span>
+        </div>
+        <div class="unet-row">
+          <div class="unet-block ub-bot" style="width:240px">Bottleneck · Conv 512</div>
+        </div>
+        <div class="unet-row" style="margin-top:16px">
+          <div class="unet-block ub-out">Sigmoid → Binary Mask (256×256×1)</div>
+        </div>
+      </div>
+    </div>
 
-    <!-- Main Content Area -->
-    <main id="appContent">
+  </div>
+</div>
+</section>
 
-        <!-- =================== PAGE 1: LANDING / HOME =================== -->
-        <section id="page-home" class="page-section active">
-            <div class="hero-bg-grid"></div>
-            <div class="hero-content">
-                <span class="badge">LIDC-IDRI Dataset · U-Net Segmentation</span>
-                <h1 class="hero-title">Lung Tumor Segmentation</h1>
-                <p class="hero-subtitle">Upload a CT scan. Get tumor segmentation in seconds.</p>
-                <a href="#upload" class="btn-primary cta-btn">Upload CT Scan &rarr;</a>
+<!-- ════════════════════════════════════════
+     DATASET
+════════════════════════════════════════ -->
+<section id="dataset">
+  <div class="reveal">
+    <p class="section-eyebrow">DATA</p>
+    <h2 class="section-title">LIDC-IDRI — the gold standard<br>for lung nodule research</h2>
+    <p class="section-sub">Every model decision was made with reference to the dataset's characteristics: sparse annotations, large class imbalance, multi-rater disagreement.</p>
+  </div>
 
-                <div class="stat-cards">
-                    <div class="stat-card">
-                        <span class="stat-label">Modality</span>
-                        <span class="stat-value">CT</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Format</span>
-                        <span class="stat-value">DICOM / NIfTI</span>
-                    </div>
-                    <div class="stat-card">
-                        <span class="stat-label">Pipeline</span>
-                        <span class="stat-value">End-to-End</span>
-                    </div>
-                </div>
-            </div>
-        </section>
+  <div class="dataset-layout reveal">
 
-        <!-- =================== PAGE 2: UPLOAD =================== -->
-        <section id="page-upload" class="page-section hidden">
-            <div class="upload-container">
-                <div class="upload-header">
-                    <h2 class="page-title">Initiate Analysis</h2>
-                    <p class="page-subtitle">Select a single DICOM file or an entire directory.</p>
-                </div>
+    <div class="dataset-facts">
+      <div class="fact-row">
+        <div class="fact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+        <div class="fact-text"><h4>1,010 CT Scans</h4><p>From The Cancer Imaging Archive (TCIA). Four radiologists independently annotated each nodule, giving us consensus labels.</p></div>
+      </div>
+      <div class="fact-row">
+        <div class="fact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></div>
+        <div class="fact-text"><h4>XML Annotation Parsing</h4><p>Raw annotations are in XML format with bounding box + nodule contour data. A custom parser converts these to binary NumPy masks aligned to slice coordinates.</p></div>
+      </div>
+      <div class="fact-row">
+        <div class="fact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <div class="fact-text"><h4>Extreme Class Imbalance</h4><p>Tumor voxels represent less than 0.5% of all voxels in a typical scan. Standard cross-entropy loss collapses — this is exactly why we use the Tversky + Focal hybrid.</p></div>
+      </div>
+      <div class="fact-row">
+        <div class="fact-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
+        <div class="fact-text"><h4>Isotropic Resampling</h4><p>Slice thickness varies wildly between scanners (0.625mm to 5mm). We resample every volume to isotropic 1mm voxels so the model sees consistent geometry regardless of scanner.</p></div>
+      </div>
+    </div>
 
-                <div id="dropzone" class="dropzone">
-                    <input type="file" id="fileInput" class="hidden-input" accept=".dcm,.nii,.nii.gz" multiple>
-                    <div class="dropzone-content" id="dropzoneContent">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
-                            stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                            class="lucide lucide-upload-cloud">
-                            <polyline points="16 16 12 12 8 16" />
-                            <line x1="12" x2="12" y1="12" y2="21" />
-                            <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3" />
-                            <polyline points="16 16 12 12 8 16" />
-                        </svg>
-                        <h3>Drop DICOM files here</h3>
-                        <p class="supported-formats">or click to browse</p>
-                    </div>
-                    <div id="fileList" class="file-list hidden">
-                        <!-- Populated by JS -->
-                    </div>
-                </div>
+    <div class="loss-card">
+      <h3>LOSS FUNCTION BREAKDOWN</h3>
 
-                <div class="upload-controls">
-                    <div class="input-group">
-                        <label for="patientId">Patient ID <span class="optional">(optional)</span></label>
-                        <input type="text" id="patientId" placeholder="e.g. PT-20240001">
-                    </div>
+      <div class="loss-bar-group">
+        <div class="loss-bar-header">
+          <span class="loss-bar-name">Tversky Loss</span>
+          <span class="loss-bar-val">α=0.3, β=0.7</span>
+        </div>
+        <div class="loss-bar-bg"><div class="loss-bar-fill" style="width:0%" data-w="70%"></div></div>
+        <p class="loss-bar-desc">Penalises False Negatives (missed tumors) 2.3× more than False Positives. β controls this ratio.</p>
+      </div>
 
-                    <div class="input-group">
-                        <label for="presetSelect">Windowing Preset</label>
-                        <select id="presetSelect">
-                            <option value="lung">Lung Window (WW: 1500, WL: -600)</option>
-                            <option value="mediastinal">Mediastinal Window (WW: 400, WL: 40)</option>
-                            <option value="bone">Bone Window (WW: 2000, WL: 400)</option>
-                            <option value="custom">Custom...</option>
-                        </select>
-                    </div>
+      <div class="loss-bar-group">
+        <div class="loss-bar-header">
+          <span class="loss-bar-name">Focal Loss</span>
+          <span class="loss-bar-val">γ = 2</span>
+        </div>
+        <div class="loss-bar-bg"><div class="loss-bar-fill" style="width:0%" data-w="55%"></div></div>
+        <p class="loss-bar-desc">Down-weights correctly classified easy pixels by (1−p)². The model spends its capacity on hard boundary cases.</p>
+      </div>
 
-                    <div class="custom-windowing hidden" id="customWindowing">
-                        <div class="input-group small">
-                            <label for="customWW">Window Width</label>
-                            <input type="number" id="customWW" value="1500">
-                        </div>
-                        <div class="input-group small">
-                            <label for="customWL">Window Level</label>
-                            <input type="number" id="customWL" value="-600">
-                        </div>
-                    </div>
-                </div>
+      <div class="loss-bar-group">
+        <div class="loss-bar-header">
+          <span class="loss-bar-name">Combined (0.5 × each)</span>
+          <span class="loss-bar-val">Weighted Sum</span>
+        </div>
+        <div class="loss-bar-bg"><div class="loss-bar-fill" style="width:0%" data-w="90%"></div></div>
+        <p class="loss-bar-desc">Empirically yields higher Dice than either loss alone on LIDC-IDRI validation split.</p>
+      </div>
+    </div>
 
-                <button id="runSegmentationBtn" class="btn-primary run-btn" disabled>
-                    Run Segmentation &rarr;
-                </button>
-            </div>
+  </div>
+</section>
 
-            <!-- Loading Spinner Overlay -->
-            <div id="uploadLoader" class="loader-overlay hidden">
-                <div class="spinner"></div>
-                <h3 id="loaderText" class="loader-text">Uploading CT scan...</h3>
-            </div>
-        </section>
+<!-- ════════════════════════════════════════
+     METRICS
+════════════════════════════════════════ -->
+<section id="metrics" style="background:var(--bg2); max-width:100%; padding:100px 40px;">
+<div style="max-width:1100px; margin:0 auto;">
+  <div class="reveal">
+    <p class="section-eyebrow">RESULTS</p>
+    <h2 class="section-title">Model performance<br>on validation set</h2>
+    <p class="section-sub">Trained on LIDC-IDRI with an 80/20 patient-level split. Evaluated per-slice on held-out patients the model never saw during training.</p>
+  </div>
 
-        <!-- =================== PAGE 3: VIEWER =================== -->
-        <section id="page-viewer" class="page-section hidden viewer-layout">
+  <div class="metrics-grid reveal">
+    <div class="metric-card">
+      <span class="metric-val">0.74</span>
+      <p class="metric-name">Dice Coefficient</p>
+      <p class="metric-desc">BEST VAL SCORE</p>
+    </div>
+    <div class="metric-card">
+      <span class="metric-val">256</span>
+      <p class="metric-name">Input Resolution</p>
+      <p class="metric-desc">PIXELS × PIXELS</p>
+    </div>
+    <div class="metric-card">
+      <span class="metric-val">3ch</span>
+      <p class="metric-name">Context Depth</p>
+      <p class="metric-desc">2.5D SLICE STACK</p>
+    </div>
+    <div class="metric-card">
+      <span class="metric-val">&lt;1s</span>
+      <p class="metric-name">Inference / Slice</p>
+      <p class="metric-desc">CPU · M1 MACBOOK</p>
+    </div>
+    <div class="metric-card">
+      <span class="metric-val">4</span>
+      <p class="metric-name">Encoder Depth</p>
+      <p class="metric-desc">RESOLUTION LEVELS</p>
+    </div>
+    <div class="metric-card">
+      <span class="metric-val">512</span>
+      <p class="metric-name">Bottleneck Filters</p>
+      <p class="metric-desc">FEATURE CHANNELS</p>
+    </div>
+  </div>
+</div>
+</section>
 
-            <!-- Left Panel: Navigator -->
-            <aside class="viewer-panel left-panel">
-                <div class="panel-header">Slice Navigator</div>
-                <div id="thumbnailContainer" class="thumbnail-list">
-                    <!-- Thumbnails generated here -->
-                </div>
-            </aside>
+<!-- ════════════════════════════════════════
+     TECH STACK
+════════════════════════════════════════ -->
+<section id="stack">
+  <div class="reveal">
+    <p class="section-eyebrow">TECH STACK</p>
+    <h2 class="section-title">Built with the right tools<br>for medical imaging</h2>
+  </div>
 
-            <!-- Center Panel: Main Viewer -->
-            <div class="viewer-main">
-                <div class="viewer-toolbar">
-                    <div class="toolbar-group">
-                        <button id="toggleMaskBtn" class="btn-tool active">Mask ON</button>
-                        <div class="slider-group">
-                            <label for="maskOpacity">Opacity</label>
-                            <input type="range" id="maskOpacity" min="0" max="1" step="0.05" value="0.45">
-                        </div>
-                    </div>
-                    <div class="toolbar-group">
-                        <button id="resetViewBtn" class="btn-tool" title="Reset View">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                                <path d="M3 3v5h5" />
-                            </svg>
-                        </button>
-                        <button id="invertBtn" class="btn-tool" title="Invert Colors">
-                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24"
-                                fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
-                                stroke-linejoin="round">
-                                <circle cx="12" cy="12" r="10" />
-                                <path
-                                    d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" />
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="window-display">
-                        WW: <span id="wwDisplay">1500</span> | WL: <span id="wlDisplay">-600</span>
-                    </div>
-                </div>
+  <div class="stack-grid reveal">
+    <div class="stack-card">
+      <p class="stack-layer">DEEP LEARNING</p>
+      <h3>Model & Training</h3>
+      <div class="stack-tags">
+        <span class="stack-tag">PyTorch</span>
+        <span class="stack-tag">MONAI</span>
+        <span class="stack-tag">Torchvision</span>
+        <span class="stack-tag">Mixed Precision</span>
+      </div>
+    </div>
+    <div class="stack-card">
+      <p class="stack-layer">DATA PROCESSING</p>
+      <h3>Image Pipeline</h3>
+      <div class="stack-tags">
+        <span class="stack-tag">pydicom</span>
+        <span class="stack-tag">SimpleITK</span>
+        <span class="stack-tag">NumPy</span>
+        <span class="stack-tag">OpenCV</span>
+        <span class="stack-tag">SciPy</span>
+      </div>
+    </div>
+    <div class="stack-card">
+      <p class="stack-layer">BACKEND</p>
+      <h3>Inference API</h3>
+      <div class="stack-tags">
+        <span class="stack-tag">FastAPI</span>
+        <span class="stack-tag">Uvicorn</span>
+        <span class="stack-tag">Python 3.11</span>
+        <span class="stack-tag">Base64 encoding</span>
+      </div>
+    </div>
+    <div class="stack-card">
+      <p class="stack-layer">FRONTEND</p>
+      <h3>Web Interface</h3>
+      <div class="stack-tags">
+        <span class="stack-tag">Vanilla JS</span>
+        <span class="stack-tag">HTML5 Canvas</span>
+        <span class="stack-tag">CSS Grid</span>
+        <span class="stack-tag">Fetch API</span>
+      </div>
+    </div>
+    <div class="stack-card">
+      <p class="stack-layer">DATASET</p>
+      <h3>Medical Data</h3>
+      <div class="stack-tags">
+        <span class="stack-tag">LIDC-IDRI</span>
+        <span class="stack-tag">TCIA</span>
+        <span class="stack-tag">DICOM</span>
+        <span class="stack-tag">XML annotations</span>
+      </div>
+    </div>
+    <div class="stack-card">
+      <p class="stack-layer">INFRASTRUCTURE</p>
+      <h3>Compute & Tools</h3>
+      <div class="stack-tags">
+        <span class="stack-tag">CUDA / MPS</span>
+        <span class="stack-tag">Git</span>
+        <span class="stack-tag">Jupyter</span>
+        <span class="stack-tag">Pandas</span>
+      </div>
+    </div>
+  </div>
+</section>
 
-                <div class="dicom-container" id="dicomWrapper">
-                    <div id="dicomViewport" class="cornerstone-element" oncontextmenu="return false;"></div>
-                    <canvas id="maskCanvas" class="mask-overlay"></canvas>
-                </div>
+<!-- ════════════════════════════════════════
+     CTA
+════════════════════════════════════════ -->
+<div class="cta-section">
+  <div class="cta-glow"></div>
+  <h2>Ready to see it <span>in action?</span></h2>
+  <p>Upload a DICOM ZIP and watch the model find tumors — slice by slice.</p>
+  <div class="hero-actions" style="justify-content:center; opacity:1; animation:none;">
+    <a href="tool.html" class="btn-primary">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+      Launch the Tool
+    </a>
+    <a href="https://github.com/26harvintilavat/Lung-Tumor-Segmentation" target="_blank" class="btn-ghost">View Source</a>
+  </div>
+</div>
 
-                <div class="viewer-footer">
-                    <button id="prevSliceBtn" class="btn-tool circle">&larr;</button>
-                    <input type="range" id="sliceScrubber" class="scrubber" min="1" max="100" value="1">
-                    <button id="nextSliceBtn" class="btn-tool circle">&rarr;</button>
-                    <span id="sliceIndicator" class="slice-indicator">Slice 1 / 100</span>
-                </div>
-            </div>
+<!-- ════════════════════════════════════════
+     FOOTER
+════════════════════════════════════════ -->
+<footer>
+  <div class="footer-logo">LungSeg <span>AI</span></div>
+  <p class="footer-note">RESEARCH · NOT FOR CLINICAL USE · LIDC-IDRI DATASET</p>
+</footer>
 
-            <!-- Right Panel: Stats -->
-            <aside class="viewer-panel right-panel">
-                <div class="card patient-card">
-                    <h4>Patient Info</h4>
-                    <div class="info-row"><span class="label">ID</span><span id="v_patientId" class="value">--</span>
-                    </div>
-                    <div class="info-row"><span class="label">Series</span><span id="v_seriesUid" class="value"
-                            title="">--</span></div>
-                    <div class="info-row"><span class="label">Slices</span><span id="v_totalSlices"
-                            class="value">--</span></div>
-                    <div class="info-row"><span class="label">Thickness</span><span id="v_thickness" class="value">--
-                            mm</span></div>
-                </div>
+<script>
+/* ──────────────────────────────────────
+   CANVAS BACKGROUND: particle grid
+────────────────────────────────────── */
+(function(){
+  const canvas = document.getElementById('bgCanvas');
+  const ctx = canvas.getContext('2d');
+  let W, H, particles = [];
 
-                <div class="card metrics-card">
-                    <h4>Tumor Metrics</h4>
-                    <div class="info-row"><span class="label">Detected Nodules</span><span id="v_nodules"
-                            class="value highlight">--</span></div>
-                    <div class="info-row"><span class="label">Tumor Volume</span><span id="v_volume"
-                            class="value highlight">-- cm³</span></div>
-                    <div class="info-row"><span class="label">Max Diameter</span><span id="v_diameter" class="value">--
-                            mm</span></div>
-                    <div class="info-row"><span class="label">Slice Range</span><span id="v_range"
-                            class="value">--</span></div>
+  function resize(){
+    W = canvas.width  = window.innerWidth;
+    H = canvas.height = window.innerHeight;
+  }
 
-                    <div class="confidence-section">
-                        <div class="conf-header">
-                            <span class="label">AI Confidence</span>
-                            <span id="v_confidenceVal" class="value">--%</span>
-                        </div>
-                        <div class="conf-bar-bg">
-                            <div id="v_confidenceBar" class="conf-bar-fill"></div>
-                        </div>
-                    </div>
-                </div>
+  function initParticles(){
+    particles = [];
+    const cols = Math.ceil(W / 80);
+    const rows = Math.ceil(H / 80);
+    for(let r=0;r<=rows;r++){
+      for(let c=0;c<=cols;c++){
+        particles.push({
+          bx: c*80, by: r*80,
+          x: c*80 + (Math.random()-.5)*20,
+          y: r*80 + (Math.random()-.5)*20,
+          vx:(Math.random()-.5)*.3,
+          vy:(Math.random()-.5)*.3,
+          a: Math.random()*.4+.05
+        });
+      }
+    }
+  }
 
-                <div class="action-buttons">
-                    <button id="downloadMaskBtn" class="btn-secondary outline">Download Mask (.npy)</button>
-                    <button id="downloadReportBtn" class="btn-secondary outline">Download Report (.txt)</button>
-                </div>
+  function draw(){
+    ctx.clearRect(0,0,W,H);
+    // connections
+    for(let i=0;i<particles.length;i++){
+      for(let j=i+1;j<particles.length;j++){
+        const dx=particles[i].x-particles[j].x;
+        const dy=particles[i].y-particles[j].y;
+        const d=Math.sqrt(dx*dx+dy*dy);
+        if(d<110){
+          ctx.beginPath();
+          ctx.strokeStyle=`rgba(0,242,255,${0.04*(1-d/110)})`;
+          ctx.lineWidth=.5;
+          ctx.moveTo(particles[i].x,particles[i].y);
+          ctx.lineTo(particles[j].x,particles[j].y);
+          ctx.stroke();
+        }
+      }
+    }
+    // dots
+    for(const p of particles){
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,1.2,0,Math.PI*2);
+      ctx.fillStyle=`rgba(0,242,255,${p.a})`;
+      ctx.fill();
+    }
+  }
 
-                <div class="history-section">
-                    <h4>Run History</h4>
-                    <div class="table-container">
-                        <table id="historyTable" class="history-table">
-                            <thead>
-                                <tr>
-                                    <th>Patient</th>
-                                    <th>Date</th>
-                                </tr>
-                            </thead>
-                            <tbody id="historyTbody">
-                                <!-- Populated from localStorage -->
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </aside>
+  function update(){
+    for(const p of particles){
+      p.x+=p.vx; p.y+=p.vy;
+      if(Math.abs(p.x-p.bx)>30) p.vx*=-1;
+      if(Math.abs(p.y-p.by)>30) p.vy*=-1;
+    }
+  }
 
-        </section>
+  function loop(){ update(); draw(); requestAnimationFrame(loop); }
 
-        <!-- =================== PAGE 4: PIPELINE STATUS =================== -->
-        <section id="page-pipeline" class="page-section hidden">
-            <div class="pipeline-container">
-                <h2 class="page-title">Pipeline Status</h2>
+  resize();
+  initParticles();
+  loop();
+  window.addEventListener('resize',()=>{ resize(); initParticles(); });
+})();
 
-                <div class="pipeline-split">
-                    <!-- Stepper -->
-                    <div class="stepper">
-                        <ul id="pipelineSteps" class="step-list">
-                            <li class="step pending" data-step="1"><span class="icon">⏳</span> DICOM Upload</li>
-                            <li class="step pending" data-step="2"><span class="icon">⏳</span> XML Annotation Parsing
-                            </li>
-                            <li class="step pending" data-step="3"><span class="icon">⏳</span> CT Series Resolution</li>
-                            <li class="step pending" data-step="4"><span class="icon">⏳</span> Mask Generation</li>
-                            <li class="step pending" data-step="5"><span class="icon">⏳</span> HU Preprocessing</li>
-                            <li class="step pending" data-step="6"><span class="icon">⏳</span> Model Inference</li>
-                            <li class="step pending" data-step="7"><span class="icon">⏳</span> Post-processing</li>
-                            <li class="step pending" data-step="8"><span class="icon">⏳</span> Results Ready</li>
-                        </ul>
-                        <button id="rerunPipelineBtn" class="btn-secondary block mt-2">Re-run Pipeline</button>
-                    </div>
+/* ──────────────────────────────────────
+   SCROLL REVEAL
+────────────────────────────────────── */
+const revealEls = document.querySelectorAll('.reveal');
+const io = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(e.isIntersecting){ e.target.classList.add('visible'); io.unobserve(e.target); }
+  });
+},{ threshold:.12 });
+revealEls.forEach(el=>io.observe(el));
 
-                    <!-- Terminal -->
-                    <div class="terminal-container">
-                        <div class="terminal-header">
-                            <span class="dot red"></span><span class="dot yellow"></span><span class="dot green"></span>
-                            <span class="terminal-title">System Logs</span>
-                        </div>
-                        <div id="terminalConsole" class="terminal-body">
-                            <div class="log-line system">LungSeg AI backend connection established.</div>
-                            <div class="log-line system">Waiting for job...</div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
+/* ──────────────────────────────────────
+   COUNT-UP FOR STATS BAND
+────────────────────────────────────── */
+const countEls = document.querySelectorAll('.band-num[data-target]');
+const countIO = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(!e.isIntersecting) return;
+    const el = e.target;
+    const target = +el.dataset.target;
+    const dur = 1400, step = 16;
+    const frames = dur/step;
+    let f=0;
+    const t = setInterval(()=>{
+      f++;
+      el.textContent = Math.round(target*(f/frames));
+      if(f>=frames){ el.textContent=target; clearInterval(t); }
+    },step);
+    countIO.unobserve(el);
+  });
+},{ threshold:.5 });
+countEls.forEach(el=>countIO.observe(el));
 
-        <!-- =================== PAGE 5: MODEL TRAINING =================== -->
-        <section id="page-training" class="page-section hidden">
-            <div class="training-container">
-                <h2 class="page-title">Model Training</h2>
-                <p class="page-subtitle">Configure hyperparameters and train the U-Net model on the processed dataset.
-                </p>
+/* ──────────────────────────────────────
+   LOSS BAR ANIMATION
+────────────────────────────────────── */
+const barEls = document.querySelectorAll('.loss-bar-fill[data-w]');
+const barIO = new IntersectionObserver((entries)=>{
+  entries.forEach(e=>{
+    if(!e.isIntersecting) return;
+    e.target.style.width = e.target.dataset.w;
+    barIO.unobserve(e.target);
+  });
+},{ threshold:.3 });
+barEls.forEach(el=>barIO.observe(el));
+</script>
 
-                <div class="training-grid">
-                    <!-- Left Column: Configuration -->
-                    <div class="training-col config-panel">
-                        <div class="panel-header">Training Configuration</div>
-                        <div class="card bg-surface mt-1">
-                            <div class="input-group">
-                                <label for="trainEpochs">Epochs</label>
-                                <input type="number" id="trainEpochs" value="50" min="1" max="500">
-                            </div>
-                            <div class="input-group">
-                                <label for="trainBatch">Batch Size</label>
-                                <input type="number" id="trainBatch" value="8" min="1" max="64">
-                            </div>
-                            <div class="input-group">
-                                <label for="trainLR">Learning Rate</label>
-                                <input type="number" id="trainLR" value="0.0001" step="0.00001">
-                            </div>
-                            <div class="input-group">
-                                <label for="trainLoss">Loss Function</label>
-                                <select id="trainLoss">
-                                    <option value="dice_bce">Dice + BCE (Default)</option>
-                                    <option value="focal">Focal Loss</option>
-                                </select>
-                            </div>
-                            <div class="input-group toggle-group mt-1">
-                                <label class="toggle-label" for="trainRemoveEmpty">
-                                    <span>Remove Empty Slices</span>
-                                    <input type="checkbox" id="trainRemoveEmpty" class="toggle-switch" checked>
-                                    <span class="slider round"></span>
-                                </label>
-                            </div>
-                            <div class="gpu-status mt-2">
-                                <span class="label">Hardware:</span>
-                                <span id="gpuStatusBadge" class="badge-status checking">Checking GPU...</span>
-                            </div>
-                            <button id="startTrainingBtn" class="btn-primary run-btn mt-2">Start Training
-                                &rarr;</button>
-                        </div>
-                    </div>
-
-                    <!-- Right Column: Progress & Metrics -->
-                    <div class="training-col progress-panel">
-                        <div class="panel-header">Live Progress</div>
-                        <div class="card bg-surface mt-1 progress-card">
-                            <div id="trainingNotStarted" class="empty-state">
-                                <p class="text-muted">Configure parameters and click "Start Training" to begin.</p>
-                            </div>
-
-                            <div id="trainingActive" class="training-active hidden">
-                                <div class="progress-header">
-                                    <h3 id="trainEpochDisplay">Epoch 0 / 50</h3>
-                                    <span id="trainEtaDisplay" class="eta-text">ETA: Calculating...</span>
-                                </div>
-                                <div class="conf-bar-bg mt-1 mb-2">
-                                    <div id="trainProgressBar" class="conf-bar-fill"
-                                        style="width: 0%; background-color: var(--accent-cyan);"></div>
-                                </div>
-
-                                <div class="metrics-grid">
-                                    <div class="metric-box">
-                                        <span class="label">Training Loss</span>
-                                        <span id="metricTrainLoss" class="value highlight">--</span>
-                                    </div>
-                                    <div class="metric-box">
-                                        <span class="label">Validation Dice</span>
-                                        <span id="metricValDice" class="value highlight">--</span>
-                                    </div>
-                                    <div class="metric-box">
-                                        <span class="label">Validation IoU</span>
-                                        <span id="metricValIou" class="value highlight">--</span>
-                                    </div>
-                                </div>
-
-                                <div id="trainingCompleteAction" class="mt-2 text-center hidden">
-                                    <div class="success-message mb-1">
-                                        <span class="icon">✅</span> Training Complete!
-                                    </div>
-                                    <p class="text-muted mb-2">Best Validation Dice: <span id="finalBestDice"
-                                            class="highlight"></span></p>
-                                    <button class="btn-secondary" onclick="window.location.hash='#upload'">Run
-                                        Inference</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <!-- =================== PAGE 6: ABOUT =================== -->
-        <section id="page-about" class="page-section hidden">
-            <div class="about-container">
-                <h2 class="page-title">About the Project</h2>
-
-                <div class="about-grid">
-                    <div class="about-col">
-                        <h3>LungSeg AI</h3>
-                        <p>A medical imaging pipeline and viewer designed for the automated segmentation of lung tumors
-                            from CT scans. It streamlines the diagnostic workflow by isolating nodules and computing
-                            volumetric metrics automatically.</p>
-
-                        <h4 class="mt-2">Dataset</h4>
-                        <p>Powered by the <strong>LIDC-IDRI</strong> dataset from The Cancer Imaging Archive (TCIA).
-                            Consisting of diagnostic and lung cancer screening thoracic CT scans with marked-up
-                            annotated lesions.</p>
-
-                        <h4 class="mt-2">Interpretability</h4>
-                        <p>All masks are generated using a 3D architecture tracking HU densities across the axial
-                            series. Detected volumes provide estimations critical for tracking morphological
-                            progression.</p>
-                    </div>
-
-                    <div class="about-col card">
-                        <h3>Model Architecture</h3>
-                        <ul class="tech-list">
-                            <li><strong>Type:</strong> U-Net (PyTorch)</li>
-                            <li><strong>Input:</strong> Normalized CT Volume (HU mapped)</li>
-                            <li><strong>Output:</strong> Binary Segmentation Map (.npy)</li>
-                        </ul>
-
-                        <h3 class="mt-2">Tech Stack</h3>
-                        <ul class="tech-list">
-                            <li><strong>Frontend:</strong> Vanilla JS, HTML5 Canvas, CSS Variables</li>
-                            <li><strong>Viewer:</strong> Cornerstone.js Core</li>
-                            <li><strong>Parser:</strong> dicomParser</li>
-                            <li><strong>Backend:</strong> Python, FastAPI</li>
-                        </ul>
-
-                        <div class="author-credits mt-2">
-                            <p>Created by <strong>Harvin Tilavat</strong></p>
-                            <a href="https://github.com/26harvintilavat/Lung-Tumor-Segmentation" target="_blank"
-                                class="btn-secondary outline mt-1">View on GitHub</a>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-    </main>
-
-    <!-- App Logic -->
-    <script src="app.js"></script>
 </body>
-
 </html>

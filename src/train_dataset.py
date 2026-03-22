@@ -47,32 +47,24 @@ class LungSegmentationDataset(Dataset):
         self.patient_series_dirs = {}
 
         for pid in patient_ids:
-            patient_raw_dir = self.raw_dir / pid
-            series_dirs = [
-                d for d in patient_raw_dir.iterdir()
-                if d.is_dir()
-            ]
-            if not series_dirs:
-                print(f"  [SKIP] No series for {pid}")
+            cache_dir = Path("data/cache")
+            mask_cache_dir = cache_dir / f"{pid}_masks"
+            
+            if not mask_cache_dir.exists():
+                print(f"  [SKIP] No cached masks for {pid}")
                 continue
 
-            mask_path = self.mask_dir / f"{pid}_mask.npy"
-            if not mask_path.exists():
-                print(f"  [SKIP] No mask for {pid}")
-                continue
+            # Load all mask slices to find tumor indices (once per patient)
+            mask_slices = sorted(list(mask_cache_dir.glob("*.npy")))
+            tumor_indices = []
+            non_tumor_indices = []
 
-            self.patient_series_dirs[pid] = series_dirs[0]
-
-            mask_volume = np.load(mask_path)
-
-            tumor_indices = get_tumor_slices(
-                mask_volume,
-                min_tumor_pixels=min_tumor_pixels
-            )
-            non_tumor_indices = [
-                z for z in range(mask_volume.shape[0])
-                if z not in set(tumor_indices)
-            ]
+            for i, m_path in enumerate(mask_slices):
+                mask_slice = np.load(m_path)
+                if np.sum(mask_slice > 0) >= min_tumor_pixels:
+                    tumor_indices.append(i)
+                else:
+                    non_tumor_indices.append(i)
 
             for z in tumor_indices:
                 self.tumor_samples.append((pid, z))
@@ -82,8 +74,6 @@ class LungSegmentationDataset(Dataset):
             print(f"  {pid} — "
                 f"tumor: {len(tumor_indices)} | "
                 f"bg: {len(non_tumor_indices)}")
-
-            del mask_volume
 
         self.samples = self._build_samples()
 
@@ -114,8 +104,8 @@ class LungSegmentationDataset(Dataset):
 
         cache_dir = Path("data/cache")
         pid_dir   = cache_dir / pid
+        mask_cache_dir = cache_dir / f"{pid}_masks"
         bbox_path = cache_dir / f"{pid}_bboxes.npy"
-        mask_path = self.mask_dir / f"{pid}_mask.npy"
 
         bboxes  = np.load(bbox_path)
         total_z = len(bboxes)
@@ -128,9 +118,7 @@ class LungSegmentationDataset(Dataset):
         curr_slice = np.load(pid_dir / f"{z:04d}.npy")
         next_slice = np.load(pid_dir / f"{next_idx:04d}.npy")
 
-        mask_volume = np.load(mask_path)
-        mask        = mask_volume[z].copy().astype(np.float32)
-        del mask_volume
+        mask = np.load(mask_cache_dir / f"{z:04d}.npy").astype(np.float32)
 
         y_min, y_max, x_min, x_max = bboxes[z]
         del bboxes

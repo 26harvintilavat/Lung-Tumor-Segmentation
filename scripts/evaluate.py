@@ -10,10 +10,24 @@ from torch.utils.data import DataLoader
 
 from configs.config import RAW_DATA_DIR, MASK_DIR, BATCH_SIZE, VAL_SPLIT, SEED
 from src.train_dataset import LungSegmentationDataset
-from src.model import UNet
-from scripts.prepare_dataloaders import get_patient_ids, split_patients
+from src.model import LungAttentionUNet
+from sklearn.model_selection import train_test_split
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+def get_patient_ids(mask_dir):
+    mask_dir = Path(mask_dir)
+    return [
+        f.stem.replace('_mask', '')
+        for f in mask_dir.glob('*_mask.npy')
+    ]
+
+def split_patients(patient_ids, val_split, seed):
+    return train_test_split(
+        patient_ids,
+        test_size=val_split,
+        random_state=seed
+    )
 
 def dice_score(pred, target):
     pred = (pred > 0.5).float()
@@ -28,9 +42,13 @@ def main():
 
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
 
-    model = UNet(in_channels=1, out_channels=1).to(device)
+    model = LungAttentionUNet(in_channels=3, out_channels=1).to(device)
 
     checkpoint_path = Path("checkpoints/best_model.pth")
+    if not checkpoint_path.exists():
+        print(f"No checkpoint found at {checkpoint_path}")
+        return
+
     checkpoint = torch.load(checkpoint_path, map_location=device)
 
     if isinstance(checkpoint, dict):
