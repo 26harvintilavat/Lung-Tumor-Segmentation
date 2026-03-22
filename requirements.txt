@@ -8,11 +8,11 @@ nibabel
 torch
 uvicorn
 scipy
-pydicom
-numpy
-torch
 torchvision
-matplotlib
 tqdm
 fastapi
 python-multipart
+monai
+scikit-learn
+SimpleITK
+opencv-python

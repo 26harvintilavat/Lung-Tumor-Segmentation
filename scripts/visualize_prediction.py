@@ -10,19 +10,21 @@ import matplotlib.pyplot as plt
 
 from configs.config import RAW_DATA_DIR, MASK_DIR
 from src.train_dataset import LungSegmentationDataset
-from src.model import UNet
+from src.model import LungAttentionUNet
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 def load_model(device):
-    model = UNet(in_channels=1, out_channels=1).to(device)
+    model = LungAttentionUNet(in_channels=3, out_channels=1).to(device)
 
     checkpoint_path = Path("checkpoints/best_model.pth")
 
     if checkpoint_path.exists():
-        model.load_state_dict(
-            torch.load(checkpoint_path, map_location=device)
-        )
+        checkpoint = torch.load(checkpoint_path, map_location=device)
+        if isinstance(checkpoint, dict) and "model_state_dict" in checkpoint:
+            model.load_state_dict(checkpoint['model_state_dict'])
+        else:
+            model.load_state_dict(checkpoint)
         print(f"Loaded model from {checkpoint_path}")
     else:
         print("Warning: No checkpoint found. Using random weights.")
@@ -50,7 +52,7 @@ def visualize_patient(patient_id, max_slices=3):
             output = model(image_tensor)
             pred = torch.sigmoid(output)
 
-        image = image.squeeze().numpy()
+        image = image[1].numpy() # middle slice of the 3-channel input
         mask = mask.squeeze().numpy()
         pred = pred.squeeze().numpy()
 

@@ -18,7 +18,8 @@ from sklearn.model_selection import train_test_split
 from configs.config import (
     RAW_DATA_DIR, MASK_DIR,
     BATCH_SIZE, LR, EPOCHS,
-    VAL_SPLIT, SEED, IMG_SIZE
+    VAL_SPLIT, SEED, IMG_SIZE,
+    NUM_WORKERS
 )
 from src.train_dataset import LungSegmentationDataset
 from src.model import LungAttentionUNet
@@ -37,28 +38,23 @@ def train_one_epoch(model, loader, optimizer, criterion, device, scaler):
         optimizer.zero_grad(set_to_none=True)
 
         images = images.to(device, memory_format= torch.channels_last, non_blocking=True)
-
         masks = masks.to(device, non_blocking=True)
 
-        # outputs = model(images)
-        # loss = bce_loss(outputs, masks) + dice_loss(outputs, masks)
-
-        # optimizer.zero_grad()
-        # loss.backward()
-        # optimizer.step()
-
-        with autocast(device_type="cuda"):
+        device_type = "cuda" if "cuda" in str(device) else "cpu"
+        with autocast(device_type=device_type, enabled=(device_type == "cuda")):
             outputs = model(images)
             loss = criterion(outputs, masks)
 
-        scaler.scale(loss).backward()
-        
-        # gradient clipping 
-        scaler.unscale_(optimizer)
-        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
-
-        scaler.step(optimizer)
-        scaler.update()
+        if device_type == "cuda":
+            scaler.scale(loss).backward()
+            scaler.unscale_(optimizer)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            scaler.step(optimizer)
+            scaler.update()
+        else:
+            loss.backward()
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+            optimizer.step()
 
         batch_dice = dice_score(outputs, masks)
         total_loss += loss.item()
@@ -81,13 +77,13 @@ def validate(model, loader, criterion, device):
 
     progress_bar = tqdm(loader, desc="Validation", leave=False)
 
+    device_type = "cuda" if "cuda" in str(device) else "cpu"
     with torch.no_grad():
         for images, masks in progress_bar:
             images = images.to(device, memory_format= torch.channels_last, non_blocking=True)
-
             masks = masks.to(device, non_blocking=True)
 
-            with autocast(device_type = "cuda"):
+            with autocast(device_type=device_type, enabled=(device_type == "cuda")):
                 outputs = model(images)
                 loss = criterion(outputs, masks)
 
@@ -113,7 +109,7 @@ def main():
     if device.type == "cuda":
         torch.backends.cudnn.benchmark = True
 
-    scaler = GradScaler()
+    scaler = GradScaler(enabled=(device.type == "cuda"))
 
     # Patients
     mask_dir    = Path(MASK_DIR)
@@ -162,24 +158,23 @@ def main():
     print("Train samples:", len(train_dataset))
     print("Val samples:", len(val_dataset))
 
-    num_workers = min(4, os.cpu_count())
     # DataLoaders
     train_loader = DataLoader(
         train_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=True,
-        num_workers= 0,
+        num_workers=NUM_WORKERS,
         pin_memory=True,
-        persistent_workers=False
+        persistent_workers=(NUM_WORKERS > 0)
         )
     
     val_loader = DataLoader(
         val_dataset, 
         batch_size=BATCH_SIZE, 
         shuffle=False,
-        num_workers=0,
+        num_workers=NUM_WORKERS,
         pin_memory=True,
-        persistent_workers=False
+        persistent_workers=(NUM_WORKERS > 0)
         )
 
     print("Train batches:", len(train_loader))
