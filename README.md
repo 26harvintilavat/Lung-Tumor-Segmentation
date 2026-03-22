@@ -31,13 +31,23 @@ Automated lung tumor segmentation from CT scans using an Attention U-Net deep le
 ```bash
 git clone https://github.com/26harvintilavat/Lung-Tumor-Segmentation.git
 cd Lung-Tumor-Segmentation
-python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+python -m venv venv
 pip install -r requirements.txt
 # Place best_model.pth in checkpoints/ (ask the author)
+```
+
+**macOS / Linux:**
+```bash
+source venv/bin/activate
 ./start.sh
 ```
 
-`start.sh` starts the API, serves the frontend, and opens your browser automatically.  
+**Windows:**
+```bat
+start.bat
+```
+
+Both scripts start the API, serve the frontend, and open your browser automatically.  
 Visit **http://localhost:3000/index.html** — landing page with project details.  
 Visit **http://localhost:3000/tool.html** — the segmentation tool.
 
@@ -197,9 +207,17 @@ checkpoints/best_model.pth
 ## 🚀 Usage
 
 ### Option A — One command (recommended)
+
+**macOS / Linux:**
 ```bash
 ./start.sh
 ```
+
+**Windows:**
+```bat
+start.bat
+```
+
 Starts the API, serves the frontend, and opens the browser automatically.
 
 ### Option B — Manual
