@@ -80,6 +80,8 @@ async def lifespan(app: FastAPI):
 # Create App (Lifespan MUST be defined before this line)
 app = FastAPI(
     title="Lung Tumor Segmentation API",
+    description="Attention U-Net based lung tumor segmentation",
+    version="1.0.0",
     lifespan=lifespan
 )
 

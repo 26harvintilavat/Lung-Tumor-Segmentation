@@ -34,10 +34,13 @@ fi
 # ── Activate venv ──────────────────────────
 source "$PROJECT_DIR/venv/bin/activate"
 
+# ── Get local IP ──────────────────────────
+LOCAL_IP=$(ipconfig getifaddr en0 2>/dev/null || hostname -I 2>/dev/null | awk '{print $1}' || echo "unknown")
+
 # ── Start API ─────────────────────────────
-echo "→  Starting API on http://127.0.0.1:8000 ..."
+echo "→  Starting API on http://0.0.0.0:8000 ..."
 cd "$PROJECT_DIR"
-uvicorn api.main:app --host 127.0.0.1 --port 8000 &
+uvicorn api.main:app --host 0.0.0.0 --port 8000 &
 API_PID=$!
 
 # ── Start frontend server ─────────────────
@@ -69,6 +72,9 @@ echo ""
 echo "  Landing page : http://127.0.0.1:3000/index.html"
 echo "  Tool         : http://127.0.0.1:3000/tool.html"
 echo "  API docs     : http://127.0.0.1:8000/docs"
+echo ""
+echo "  Share with others on your network:"
+echo "  Set API_BASE_URL = http://$LOCAL_IP:8000 in frontend/app.js"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "  Press Ctrl+C to stop everything."
