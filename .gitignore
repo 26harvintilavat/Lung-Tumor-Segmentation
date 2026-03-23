@@ -2,6 +2,7 @@
 data/raw/
 data/processed/
 data/cache/
+data/masks/
 data/lung_data/
 data/**/*.dcm
 data/**/*.nii
@@ -40,6 +41,6 @@ test_patient.zip
 !start.sh
 !start.bat
 
-data 
+data/
 
 
