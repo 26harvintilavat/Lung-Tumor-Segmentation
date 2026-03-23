@@ -1,3 +1,5 @@
+// Change this to the IP of the machine running the API if accessing from another device.
+// Example: const API_BASE_URL = 'http://192.168.1.45:8000';
 const API_BASE_URL = 'http://localhost:8000';
 
 const el = {

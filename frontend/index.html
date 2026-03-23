@@ -376,46 +376,37 @@ nav {
   50%      { transform: translateX(-50%) translateY(-4px); }
 }
 
-/* tumor annotation pin */
-.tumor-pin {
-  position: absolute;
-  top: 38%; left: 62%;
-  z-index: 4;
-  pointer-events: none;
+/* tumor annotation badge in titlebar */
+.model-tumor-badge {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: 4px;
-  opacity: 0;
-  transition: opacity .6s .8s;
-}
-.tumor-pin.show { opacity: 1; }
-.tumor-pin-dot {
-  width: 10px; height: 10px;
-  border-radius: 50%;
-  background: rgba(255,60,60,.8);
-  border: 2px solid #ff3c3c;
-  box-shadow: 0 0 12px rgba(255,60,60,.6);
-  animation: pinPulse 1.8s ease-in-out infinite;
-}
-@keyframes pinPulse {
-  0%,100% { box-shadow: 0 0 8px rgba(255,60,60,.5); transform: scale(1); }
-  50%     { box-shadow: 0 0 20px rgba(255,60,60,.8); transform: scale(1.2); }
-}
-.tumor-pin-line {
-  width: 1px; height: 24px;
-  background: linear-gradient(180deg, #ff3c3c, transparent);
-}
-.tumor-pin-label {
+  gap: 6px;
   font-family: var(--mono);
-  font-size: 8px;
-  color: #ff3c3c;
+  font-size: 9px;
+  color: #ff6b6b;
   letter-spacing: .08em;
-  background: rgba(0,0,0,.7);
-  padding: 2px 6px;
-  border-radius: 4px;
+  padding: 3px 10px;
+  background: rgba(255,60,60,.1);
   border: 1px solid rgba(255,60,60,.3);
+  border-radius: 20px;
   white-space: nowrap;
+  animation: fadeIn .4s ease;
+}
+.tumor-badge-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #ff4444;
+  box-shadow: 0 0 6px rgba(255,60,60,.7);
+  animation: badgePulse 1.8s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes badgePulse {
+  0%,100% { box-shadow: 0 0 4px rgba(255,60,60,.5); }
+  50%     { box-shadow: 0 0 10px rgba(255,60,60,.9); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 
 .model-card-footer {
@@ -972,6 +963,10 @@ footer {
         <div class="ct-dot y"></div>
         <div class="ct-dot g"></div>
         <div class="model-card-title" id="modelCardTitle">LOADING 3D MODEL...</div>
+        <div class="model-tumor-badge hidden" id="modelTumorBadge">
+          <span class="tumor-badge-dot"></span>
+          <span>Nodule detection target</span>
+        </div>
       </div>
 
       <!-- viewport -->
@@ -1006,12 +1001,7 @@ footer {
           allowfullscreen>
         </iframe>
 
-        <!-- tumor annotation pin -->
-        <div class="tumor-pin" id="tumorPin">
-          <div class="tumor-pin-dot"></div>
-          <div class="tumor-pin-line"></div>
-          <div class="tumor-pin-label">TUMOR REGION</div>
-        </div>
+        <!-- removed floating tumor pin - unreliable over iframe -->
 
         <!-- drag hint -->
         <div class="model-drag-hint" id="modelDragHint">
@@ -1557,7 +1547,7 @@ barEls.forEach(el=>barIO.observe(el));
   const skeleton  = document.getElementById('modelSkeleton');
   const scanLine  = document.getElementById('modelScanLine');
   const dragHint  = document.getElementById('modelDragHint');
-  const tumorPin  = document.getElementById('tumorPin');
+  const tumorBadge = document.getElementById('modelTumorBadge');
   const title     = document.getElementById('modelCardTitle');
   const fallback  = document.getElementById('modelFallback');
   const apiStat   = document.getElementById('footerApiStat');
@@ -1583,9 +1573,9 @@ barEls.forEach(el=>barIO.observe(el));
       scanLine.classList.add('hide');
       title.textContent = '3D LUNG MODEL · INTERACTIVE';
       title.classList.add('loaded');
-      // Show pin and hint after model is visible
+      // Show badge and hint after model is visible
       setTimeout(() => {
-        tumorPin.classList.add('show');
+        if (tumorBadge) tumorBadge.classList.remove('hidden');
         dragHint.style.opacity = '1';
       }, 600);
     }, 1200);
@@ -1597,7 +1587,6 @@ barEls.forEach(el=>barIO.observe(el));
     if (!hinted) {
       hinted = true;
       dragHint.classList.add('hide');
-      tumorPin.style.opacity = '0';
     }
   });
 

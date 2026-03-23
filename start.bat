@@ -37,9 +37,17 @@ if not exist "%PROJECT_DIR%checkpoints\best_model.pth" (
 :: -- Activate venv --
 call "%PROJECT_DIR%venv\Scripts\activate.bat"
 
+:: -- Get local IP --
+for /f "tokens=2 delims=:" %%a in ('ipconfig ^| findstr /i "IPv4"') do (
+    set LOCAL_IP=%%a
+    goto :got_ip
+)
+:got_ip
+set LOCAL_IP=%LOCAL_IP: =%
+
 :: -- Start API in new window --
-echo ^-^> Starting API on http://localhost:8000 ...
-start "LungSeg API" cmd /k "cd /d %PROJECT_DIR% && uvicorn api.main:app --host localhost --port 8000"
+echo ^-^> Starting API on http://0.0.0.0:8000 ...
+start "LungSeg API" cmd /k "cd /d %PROJECT_DIR% && uvicorn api.main:app --host 0.0.0.0 --port 8000"
 
 :: -- Wait for API to boot --
 echo ^-^> Waiting for API to load model...
@@ -61,6 +69,9 @@ echo.
 echo   Landing page : http://localhost:3000/index.html
 echo   Tool         : http://localhost:3000/tool.html
 echo   API docs     : http://localhost:8000/docs
+echo.
+echo   Share with others on your network:
+echo   Set API_BASE_URL = http://%LOCAL_IP%:8000 in frontend/app.js
 echo ========================================
 echo.
 echo   Close the API and Frontend windows to stop.

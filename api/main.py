@@ -27,19 +27,6 @@ from src.preprocessing import (
     resize_mask
 )
 
-app = FastAPI(
-    title="Lung Tumor Segmentation API",
-    description="Attention U-Net based lung tumor segmentation",
-    version="1.0.0",
-    lifespan=lifespan
-)
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model = None
 MODEL_PATH = PROJECT_ROOT/"checkpoints"/"best_model.pth"
@@ -85,6 +72,19 @@ async def lifespan(app: FastAPI):
         del checkpoint
     print("API ready!")
     yield
+
+app = FastAPI(
+    title="Lung Tumor Segmentation API",
+    description="Attention U-Net based lung tumor segmentation",
+    version="1.0.0",
+    lifespan=lifespan
+)
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 def preprocess_dicom_series(dicom_files):
     """Preprocess list of DICOM files into model input"""
