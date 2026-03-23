@@ -35,9 +35,11 @@ frontend/test_viewer.html
 
 # ── Test files ──
 test_patient.zip
-test_viewer.html
 
 # ── Keep launchers ──
 !start.sh
 !start.bat
+
+data 
+
 

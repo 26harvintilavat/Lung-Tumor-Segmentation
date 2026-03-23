@@ -1,4 +1,4 @@
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'http://127.0.0.1:8000';
 
 const el = {
     dropzone:    document.getElementById('dropzone'),
@@ -38,11 +38,14 @@ async function checkHealth() {
     try {
         const res = await fetch(`${API_BASE_URL}/health`);
         if (res.ok) {
+            el.statusDot.classList.remove('offline');
             el.statusDot.classList.add('online');
         } else {
+            el.statusDot.classList.remove('online');
             el.statusDot.classList.add('offline');
         }
     } catch (e) {
+        el.statusDot.classList.remove('online');
         el.statusDot.classList.add('offline');
     }
 }

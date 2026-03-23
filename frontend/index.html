@@ -1602,7 +1602,7 @@ barEls.forEach(el=>barIO.observe(el));
   });
 
   // Live API status in footer
-  fetch('http://localhost:8000/health')
+  fetch('http://127.0.0.1:8000/health')
     .then(r => r.json())
     .then(d => {
       apiStat.textContent  = d.model_loaded ? 'ONLINE' : 'NO MODEL';

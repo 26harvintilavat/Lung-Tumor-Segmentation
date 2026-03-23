@@ -11,6 +11,8 @@ echo ""
 # ── Check venv exists ──────────────────────
 if [ ! -d "$PROJECT_DIR/venv" ]; then
   echo "❌  Virtual environment not found."
+
+  
   echo ""
   echo "    Run this first:"
   echo "    python -m venv venv && source venv/bin/activate && pip install -r requirements.txt"
@@ -33,22 +35,22 @@ fi
 source "$PROJECT_DIR/venv/bin/activate"
 
 # ── Start API ─────────────────────────────
-echo "→  Starting API on http://localhost:8000 ..."
+echo "→  Starting API on http://127.0.0.1:8000 ..."
 cd "$PROJECT_DIR"
-uvicorn api.main:app --host localhost --port 8000 &
+uvicorn api.main:app --host 127.0.0.1 --port 8000 &
 API_PID=$!
 
 # ── Start frontend server ─────────────────
-echo "→  Starting frontend on http://localhost:3000 ..."
+echo "→  Starting frontend on http://127.0.0.1:3000 ..."
 cd "$PROJECT_DIR/frontend"
-python -m http.server 3000 &
+python -m http.server 3000 --bind 127.0.0.1 &
 FRONTEND_PID=$!
 
 # ── Wait for API to be ready ──────────────
 echo "→  Waiting for API to load model..."
 for i in $(seq 1 30); do
   sleep 1
-  if curl -s http://localhost:8000/health > /dev/null 2>&1; then
+  if curl -s http://127.0.0.1:8000/health > /dev/null 2>&1; then
     break
   fi
 done
@@ -56,17 +58,17 @@ done
 # ── Open browser ──────────────────────────
 echo "→  Opening browser..."
 sleep 1
-open http://localhost:3000/index.html 2>/dev/null || \
-xdg-open http://localhost:3000/index.html 2>/dev/null || \
-echo "   Open http://localhost:3000/index.html in your browser"
+open http://127.0.0.1:3000/index.html 2>/dev/null || \
+xdg-open http://127.0.0.1:3000/index.html 2>/dev/null || \
+echo "   Open http://127.0.0.1:3000/index.html in your browser"
 
 echo ""
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo "  ✅  LungSeg AI is running"
 echo ""
-echo "  Landing page : http://localhost:3000/index.html"
-echo "  Tool         : http://localhost:3000/tool.html"
-echo "  API docs     : http://localhost:8000/docs"
+echo "  Landing page : http://127.0.0.1:3000/index.html"
+echo "  Tool         : http://127.0.0.1:3000/tool.html"
+echo "  API docs     : http://127.0.0.1:8000/docs"
 echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 echo ""
 echo "  Press Ctrl+C to stop everything."

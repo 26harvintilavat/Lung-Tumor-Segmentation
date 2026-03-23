@@ -2,67 +2,42 @@
 setlocal enabledelayedexpansion
 
 set PROJECT_DIR=%~dp0
+set VENV_PYTHON="%PROJECT_DIR%venv\Scripts\python.exe"
 
 echo.
 echo ========================================
-echo   LungSeg AI -- Starting up
+echo   LungSeg AI -- Starting up (Debug Mode)
 echo ========================================
 echo.
 
-:: -- Check venv exists --
-if not exist "%PROJECT_DIR%venv\Scripts\activate.bat" (
-    echo [ERROR] Virtual environment not found.
-    echo.
-    echo   Run this first:
-    echo   python -m venv venv
-    echo   venv\Scripts\activate
-    echo   pip install -r requirements.txt
-    echo.
+:: -- Check if venv python exists --
+if not exist %VENV_PYTHON% (
+    echo [ERROR] Virtual environment not found at %VENV_PYTHON%
     pause
     exit /b 1
 )
 
-:: -- Check model weights exist --
-if not exist "%PROJECT_DIR%checkpoints\best_model.pth" (
-    echo [ERROR] Model weights not found at checkpoints\best_model.pth
-    echo.
-    echo   The API cannot start without the trained model.
-    echo   Ask the author for best_model.pth and place it at:
-    echo   %PROJECT_DIR%checkpoints\best_model.pth
-    echo.
-    pause
-    exit /b 1
-)
+:: -- Start API --
+:: We use cmd /k so the window stays open if the API crashes
+echo ^-^> Starting API on http://127.0.0.1:8000 ...
+start "LungSeg API" cmd /k "cd /d %PROJECT_DIR% && %VENV_PYTHON% -m uvicorn api.main:app --host 0.0.0.0 --port 8000"
 
-:: -- Activate venv --
-call "%PROJECT_DIR%venv\Scripts\activate.bat"
+:: -- Start Frontend --
+echo ^-^> Starting Frontend on http://127.0.0.1:3000 ...
+start "LungSeg Frontend" cmd /k "cd /d %PROJECT_DIR%frontend && %VENV_PYTHON% -m http.server 3000 --bind 127.0.0.1"
 
-:: -- Start API in new window --
-echo ^-^> Starting API on http://localhost:8000 ...
-start "LungSeg API" cmd /k "cd /d %PROJECT_DIR% && uvicorn api.main:app --host localhost --port 8000"
+echo.
+echo ^-^> Waiting 5 seconds for model to load...
+timeout /t 5 /nobreak > nul
 
-:: -- Wait for API to boot --
-echo ^-^> Waiting for API to load model...
-timeout /t 6 /nobreak > nul
-
-:: -- Start frontend server in new window --
-echo ^-^> Starting frontend on http://localhost:3000 ...
-start "LungSeg Frontend" cmd /k "cd /d %PROJECT_DIR%frontend && python -m http.server 3000"
-
-:: -- Wait a moment then open browser --
-timeout /t 2 /nobreak > nul
-echo ^-^> Opening browser...
-start http://localhost:3000/index.html
+echo ^-^> Opening Tool...
+start http://127.0.0.1:3000/tool.html
 
 echo.
 echo ========================================
-echo   LungSeg AI is running
-echo.
-echo   Landing page : http://localhost:3000/index.html
-echo   Tool         : http://localhost:3000/tool.html
-echo   API docs     : http://localhost:8000/docs
+echo   If you see "Failed to fetch":
+echo   1. Check the "LungSeg API" window for errors.
+echo   2. Ensure no other program is using port 8000.
 echo ========================================
-echo.
-echo   Close the API and Frontend windows to stop.
 echo.
 pause
